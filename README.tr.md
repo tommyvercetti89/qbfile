@@ -39,18 +39,18 @@ QBFile; hem yerel ağlarda (LAN) hem de internet üzerinde (WAN) sıfır-bilgi (
 
 ```mermaid
 graph TD
-    subgraph Cihaz A (İstemci)
-        A1[Kullanıcı Arayüzü - Svelte] <--> A2[Go Backend Core]
-        A2 <--> A3[(AES-256 Şifreli Profil)]
+    subgraph "Cihaz A (İstemci)"
+        A1["Kullanıcı Arayüzü - Svelte"] <--> A2["Go Backend Core"]
+        A2 <--> A3["AES-256 Şifreli Profil"]
     end
     
-    subgraph İnternet (WAN) / LAN
-        S[Sinyalleşme ve Relay Sunucusu]
+    subgraph "İnternet (WAN) / LAN"
+        S["Sinyalleşme ve Relay Sunucusu"]
     end
     
-    subgraph Cihaz B (İstemci)
-        B1[Kullanıcı Arayüzü - Svelte] <--> B2[Go Backend Core]
-        B2 <--> B3[(AES-256 Şifreli Profil)]
+    subgraph "Cihaz B (İstemci)"
+        B1["Kullanıcı Arayüzü - Svelte"] <--> B2["Go Backend Core"]
+        B2 <--> B3["AES-256 Şifreli Profil"]
     end
     
     A2 <-->|1. Güvenli El Sıkışma & ECDH| S

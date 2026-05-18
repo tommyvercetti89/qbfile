@@ -39,18 +39,18 @@ QBFile is a high-performance, **End-to-End Encrypted (E2EE) peer-to-peer (P2P) f
 
 ```mermaid
 graph TD
-    subgraph Device A (Client)
-        A1[User Interface - Svelte] <--> A2[Go Backend Core]
-        A2 <--> A3[(AES-256 Encrypted Profile)]
+    subgraph "Device A (Client)"
+        A1["User Interface - Svelte"] <--> A2["Go Backend Core"]
+        A2 <--> A3["AES-256 Encrypted Profile"]
     end
     
-    subgraph Global WAN / LAN
-        S[Matchmaking & Relay Server]
+    subgraph "Global WAN / LAN"
+        S["Matchmaking & Relay Server"]
     end
     
-    subgraph Device B (Client)
-        B1[User Interface - Svelte] <--> B2[Go Backend Core]
-        B2 <--> B3[(AES-256 Encrypted Profile)]
+    subgraph "Device B (Client)"
+        B1["User Interface - Svelte"] <--> B2["Go Backend Core"]
+        B2 <--> B3["AES-256 Encrypted Profile"]
     end
     
     A2 <-->|1. Handshake & ECDH negotiation| S
