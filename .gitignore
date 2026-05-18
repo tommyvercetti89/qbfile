@@ -1,0 +1,37 @@
+# Compiled binaries / executables
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+qbfile.exe
+
+# Wails and Frontend build outputs
+build/bin/
+frontend/dist/
+
+# Package dependencies
+node_modules/
+vendor/
+
+# IDEs and local configurations
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+
+# Installer and temp directories
+Output/
+*.enc
+*.log
+*.tmp
+temp/
