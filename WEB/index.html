@@ -1,0 +1,1573 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QBFile - Uçtan Uca Şifreli P2P Dosya Aktarım ve Sohbet</title>
+    <!-- Google Fonts - Plus Jakarta Sans for ultra-bold modern typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #08090d;
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --card-border: rgba(255, 255, 255, 0.07);
+            --accent-color: #10b981; /* Default: Cyber Green */
+            --accent-glow: rgba(16, 185, 129, 0.15);
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --font-display: 'Plus Jakarta Sans', sans-serif;
+            --font-mono: 'Space Grotesk', sans-serif;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: var(--font-display);
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        /* Abstract cyber grid background */
+        .cyber-grid {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+            z-index: -2;
+        }
+
+        .glow-orb {
+            position: fixed;
+            width: 600px;
+            height: 600px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+            top: -200px;
+            right: -100px;
+            pointer-events: none;
+            z-index: -1;
+            filter: blur(80px);
+        }
+
+        .glow-orb-2 {
+            position: fixed;
+            width: 500px;
+            height: 500px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, transparent 70%);
+            bottom: -150px;
+            left: -150px;
+            pointer-events: none;
+            z-index: -1;
+            filter: blur(80px);
+        }
+
+        /* Header / Navbar */
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(8, 9, 13, 0.7);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--card-border);
+            padding: 1.25rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+            color: var(--text-main);
+            font-weight: 800;
+            font-size: 1.5rem;
+            letter-spacing: -0.5px;
+            cursor: pointer;
+        }
+
+        .logo span {
+            color: var(--accent-color);
+        }
+
+        nav {
+            display: flex;
+            align-items: center;
+            gap: 2.5rem;
+        }
+
+        nav a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: var(--transition);
+        }
+
+        nav a:hover {
+            color: var(--text-main);
+        }
+
+        .btn-navbar {
+            background: transparent;
+            border: 1px solid var(--accent-color);
+            color: var(--accent-color);
+            padding: 0.5rem 1.25rem;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            text-decoration: none;
+            transition: var(--transition);
+        }
+
+        .btn-navbar:hover {
+            background: var(--accent-color);
+            color: #000;
+            box-shadow: 0 0 15px var(--accent-color);
+        }
+
+        /* Container styling */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        /* Hero Section */
+        .hero {
+            padding: 8rem 0 6rem 0;
+            text-align: center;
+            position: relative;
+        }
+
+        .badge {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            padding: 0.5rem 1.25rem;
+            border-radius: 100px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--accent-color);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 2.5rem;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+
+        .badge::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--accent-color);
+            box-shadow: 0 0 8px var(--accent-color);
+        }
+
+        .hero h1 {
+            font-size: 5rem;
+            font-weight: 900;
+            line-height: 1.05;
+            letter-spacing: -2.5px;
+            max-width: 950px;
+            margin: 0 auto 2rem auto;
+            color: #ffffff;
+        }
+
+        .hero h1 span {
+            background: linear-gradient(135deg, #ffffff 30%, var(--accent-color) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero p {
+            font-size: 1.25rem;
+            color: var(--text-muted);
+            max-width: 680px;
+            margin: 0 auto 3.5rem auto;
+            font-weight: 500;
+            line-height: 1.6;
+        }
+
+        .cta-group {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .btn-primary {
+            background-color: var(--accent-color);
+            color: #000000;
+            padding: 1.125rem 2.5rem;
+            border-radius: 12px;
+            font-weight: 800;
+            font-size: 1.05rem;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            transition: var(--transition);
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.2);
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px var(--accent-color);
+        }
+
+        .btn-secondary {
+            background-color: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--card-border);
+            color: var(--text-main);
+            padding: 1.125rem 2.5rem;
+            border-radius: 12px;
+            font-weight: 800;
+            font-size: 1.05rem;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            transition: var(--transition);
+        }
+
+        .btn-secondary:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+        }
+
+        /* Features Section */
+        .features {
+            padding: 6rem 0;
+            border-top: 1px solid var(--card-border);
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 4.5rem;
+        }
+
+        .section-header h2 {
+            font-size: 3rem;
+            font-weight: 900;
+            letter-spacing: -1.5px;
+            margin-bottom: 1rem;
+        }
+
+        .section-header p {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+            font-weight: 500;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 2rem;
+        }
+
+        .feature-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            padding: 3rem 2.5rem;
+            border-radius: 20px;
+            transition: var(--transition);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card:hover {
+            border-color: var(--accent-color);
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+
+        .feature-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 14px;
+            background: rgba(16, 185, 129, 0.05);
+            border: 1px solid rgba(16, 185, 129, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 2rem;
+            color: var(--accent-color);
+            font-size: 1.75rem;
+            transition: var(--transition);
+        }
+
+        .feature-card:hover .feature-icon {
+            background: var(--accent-color);
+            color: #000;
+            box-shadow: 0 0 20px var(--accent-color);
+        }
+
+        .feature-card h3 {
+            font-size: 1.5rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            margin-bottom: 1rem;
+        }
+
+        .feature-card p {
+            color: var(--text-muted);
+            font-size: 0.975rem;
+            font-weight: 500;
+            line-height: 1.6;
+        }
+
+        /* E2EE Security Interactive Banner */
+        .security-banner {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.02) 0%, rgba(99, 102, 241, 0.02) 100%);
+            border: 1px solid var(--card-border);
+            border-radius: 24px;
+            padding: 4rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 4rem;
+            margin: 4rem 0 8rem 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .security-banner::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: radial-gradient(circle at 80% 20%, var(--accent-glow) 0%, transparent 60%);
+            pointer-events: none;
+        }
+
+        .security-info {
+            flex: 1.2;
+            position: relative;
+            z-index: 2;
+        }
+
+        .security-info h3 {
+            font-size: 2.5rem;
+            font-weight: 900;
+            letter-spacing: -1px;
+            margin-bottom: 1.5rem;
+        }
+
+        .security-info p {
+            color: var(--text-muted);
+            font-size: 1.05rem;
+            line-height: 1.7;
+            margin-bottom: 2.5rem;
+            font-weight: 500;
+        }
+
+        .security-metrics {
+            display: flex;
+            gap: 2.5rem;
+        }
+
+        .metric {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .metric-val {
+            font-family: var(--font-mono);
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--accent-color);
+        }
+
+        .metric-lbl {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            font-weight: 600;
+            margin-top: 0.25rem;
+        }
+
+        .security-visual {
+            flex: 0.8;
+            display: flex;
+            justify-content: center;
+            position: relative;
+            z-index: 2;
+        }
+
+        .lock-container {
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            background: rgba(16, 185, 129, 0.03);
+            border: 1px solid rgba(16, 185, 129, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+            animation: pulse 4s infinite ease-in-out;
+        }
+
+        .lock-container svg {
+            width: 64px;
+            height: 64px;
+            fill: var(--accent-color);
+            filter: drop-shadow(0 0 10px var(--accent-color));
+        }
+
+        /* Updates Timeline Section */
+        .updates {
+            padding: 6rem 0;
+            border-top: 1px solid var(--card-border);
+        }
+
+        .timeline {
+            max-width: 800px;
+            margin: 0 auto;
+            position: relative;
+            padding-left: 3rem;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 7px;
+            width: 2px;
+            height: 100%;
+            background: var(--card-border);
+        }
+
+        .timeline-item {
+            position: relative;
+            margin-bottom: 4rem;
+        }
+
+        .timeline-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .timeline-dot {
+            position: absolute;
+            left: -3rem;
+            top: 6px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--bg-color);
+            border: 3px solid var(--accent-color);
+            box-shadow: 0 0 10px var(--accent-color);
+            z-index: 2;
+            transition: var(--transition);
+        }
+
+        .timeline-item:hover .timeline-dot {
+            background: var(--accent-color);
+            transform: scale(1.2);
+        }
+
+        .timeline-date {
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            color: var(--accent-color);
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+        }
+
+        .timeline-content {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            padding: 2rem 2.5rem;
+            border-radius: 16px;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+            transition: var(--transition);
+        }
+
+        .timeline-item:hover .timeline-content {
+            border-color: rgba(255,255,255,0.12);
+            background: rgba(255,255,255,0.04);
+        }
+
+        .timeline-content h3 {
+            font-size: 1.35rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            margin-bottom: 1rem;
+        }
+
+        .timeline-content p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        .timeline-tags {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .tag {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid var(--card-border);
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 0.25rem 0.75rem;
+            border-radius: 100px;
+            color: var(--text-muted);
+        }
+
+        /* Footer */
+        footer {
+            border-top: 1px solid var(--card-border);
+            padding: 4rem 2rem;
+            text-align: center;
+            background: rgba(4, 5, 8, 0.8);
+        }
+
+        footer p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            font-weight: 500;
+            max-width: 600px;
+            margin: 0 auto 1.5rem auto;
+        }
+
+        .footer-logo {
+            font-weight: 900;
+            font-size: 1.25rem;
+            color: var(--text-muted);
+            text-decoration: none;
+            letter-spacing: -0.5px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+            user-select: none;
+        }
+
+        .footer-logo span {
+            color: var(--accent-color);
+        }
+
+        /* ----------------------------------------------------- */
+        /* HIDDEN ADMIN PANEL OVERLAY */
+        /* ----------------------------------------------------- */
+        #admin-panel {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(8, 9, 13, 0.96);
+            backdrop-filter: blur(20px);
+            z-index: 1000;
+            display: none;
+            color: #ffffff;
+            font-family: var(--font-display);
+        }
+
+        .admin-auth-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .admin-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--card-border);
+            padding: 3.5rem 3rem;
+            border-radius: 24px;
+            width: 440px;
+            text-align: center;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.6);
+        }
+
+        .admin-card h2 {
+            font-size: 2.25rem;
+            font-weight: 900;
+            letter-spacing: -1px;
+            margin-bottom: 0.75rem;
+        }
+
+        .admin-card p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            margin-bottom: 2rem;
+        }
+
+        .admin-input {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--card-border);
+            padding: 1rem 1.25rem;
+            border-radius: 12px;
+            color: #fff;
+            font-size: 1rem;
+            text-align: center;
+            margin-bottom: 1.5rem;
+            transition: var(--transition);
+        }
+
+        .admin-input:focus {
+            border-color: var(--accent-color);
+            outline: none;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.1);
+        }
+
+        .admin-btn {
+            width: 100%;
+            background: var(--accent-color);
+            color: #000;
+            padding: 1rem;
+            border-radius: 12px;
+            font-weight: 800;
+            font-size: 1rem;
+            border: none;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .admin-btn:hover {
+            box-shadow: 0 0 20px var(--accent-color);
+            transform: translateY(-1px);
+        }
+
+        /* Active Dashboard Styling */
+        .dashboard {
+            width: 100%;
+            height: 100%;
+            display: none;
+            grid-template-columns: 280px 1fr;
+        }
+
+        .dash-sidebar {
+            border-right: 1px solid var(--card-border);
+            padding: 2.5rem 1.5rem;
+            background: rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .dash-logo {
+            font-weight: 900;
+            font-size: 1.5rem;
+            letter-spacing: -0.5px;
+            margin-bottom: 3rem;
+            padding-left: 0.5rem;
+        }
+
+        .dash-logo span {
+            color: var(--accent-color);
+        }
+
+        .dash-menu {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            flex-grow: 1;
+        }
+
+        .dash-item {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 0.85rem 1rem;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            text-align: left;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .dash-item:hover, .dash-item.active {
+            color: #ffffff;
+            background: rgba(255, 255, 255, 0.03);
+            border-left: 3px solid var(--accent-color);
+        }
+
+        .btn-close-dash {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            padding: 0.75rem;
+            border-radius: 10px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition);
+            text-align: center;
+            width: 100%;
+        }
+
+        .btn-close-dash:hover {
+            background: #ef4444;
+            color: #000;
+        }
+
+        .dash-main {
+            padding: 3rem 4rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .dash-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 3rem;
+            border-bottom: 1px solid var(--card-border);
+            padding-bottom: 1.5rem;
+        }
+
+        .dash-header h2 {
+            font-size: 2rem;
+            font-weight: 900;
+            letter-spacing: -1px;
+        }
+
+        .btn-save-export {
+            background: linear-gradient(135deg, var(--accent-color) 0%, #10b981 100%);
+            color: #000;
+            padding: 0.85rem 1.75rem;
+            border-radius: 10px;
+            font-weight: 800;
+            font-size: 0.95rem;
+            border: none;
+            cursor: pointer;
+            transition: var(--transition);
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.2);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-save-export:hover {
+            box-shadow: 0 0 25px var(--accent-color);
+            transform: translateY(-1px);
+        }
+
+        /* Tab Content Panel */
+        .tab-panel {
+            display: none;
+            flex-grow: 1;
+        }
+
+        .tab-panel.active {
+            display: block;
+        }
+
+        /* Custom Forms inside Admin Dashboard */
+        .form-group {
+            margin-bottom: 2rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 700;
+            font-size: 0.95rem;
+            color: var(--text-main);
+            margin-bottom: 0.75rem;
+        }
+
+        .form-control {
+            width: 100%;
+            background: rgba(0,0,0,0.5);
+            border: 1px solid var(--card-border);
+            padding: 0.85rem 1.25rem;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 1rem;
+            font-family: var(--font-display);
+            transition: var(--transition);
+        }
+
+        .form-control:focus {
+            border-color: var(--accent-color);
+            outline: none;
+        }
+
+        textarea.form-control {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .color-picker-group {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .color-bubble {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: var(--transition);
+        }
+
+        .color-bubble.active {
+            border-color: #ffffff;
+            transform: scale(1.1);
+        }
+
+        /* Custom Dynamic List styling for Updates */
+        .admin-list-item {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--card-border);
+            padding: 1.25rem 1.5rem;
+            border-radius: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .admin-list-item-title {
+            font-weight: 700;
+            font-size: 1rem;
+        }
+
+        .admin-list-item-date {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: var(--accent-color);
+        }
+
+        .btn-delete-item {
+            background: transparent;
+            color: #ef4444;
+            border: none;
+            cursor: pointer;
+            font-weight: 700;
+            transition: var(--transition);
+        }
+
+        .btn-delete-item:hover {
+            color: #ff6b6b;
+            transform: scale(1.05);
+        }
+
+        .publish-success-message {
+            background: rgba(16, 185, 129, 0.05);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-top: 2rem;
+            display: none;
+        }
+
+        .publish-success-message h4 {
+            color: var(--accent-color);
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+        }
+
+        .publish-success-message p {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+                box-shadow: 0 0 40px rgba(16, 185, 129, 0.1);
+            }
+            50% {
+                transform: scale(1.03);
+                box-shadow: 0 0 60px rgba(16, 185, 129, 0.25);
+            }
+        }
+
+        @media (max-width: 900px) {
+            .hero h1 { font-size: 3.5rem; }
+            header { padding: 1rem; }
+            nav { display: none; }
+            .security-banner { flex-direction: column; padding: 2.5rem; gap: 2.5rem; }
+            .security-metrics { gap: 1.5rem; }
+            .dashboard { grid-template-columns: 1fr; }
+            .dash-sidebar { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="cyber-grid"></div>
+    <div class="glow-orb" id="orb-accent"></div>
+    <div class="glow-orb-2"></div>
+
+    <!-- Header Navbar -->
+    <header>
+        <a class="logo" id="header-logo" href="#">
+            QB<span>File</span>
+        </a>
+        <nav>
+            <a href="#features" id="nav-lbl-features">Özellikler</a>
+            <a href="#security" id="nav-lbl-security">Güvenlik</a>
+            <a href="#updates" id="nav-lbl-updates">Güncellemeler</a>
+            <a href="#download" class="btn-navbar" id="nav-lbl-download">İndir</a>
+        </nav>
+    </header>
+
+    <div class="container">
+        <!-- Hero Section -->
+        <section class="hero" id="download">
+            <div class="badge" id="hero-badge-text">v1.0.0 Kararlı Sürüm Yayında</div>
+            <h1 id="hero-title">Sıfır İfşa, <span>Maksimum Gizlilik.</span></h1>
+            <p id="hero-desc">QBFile, yerel ağınızda veya internet üzerinde uçtan uca şifreli (E2EE) olarak P2P dosya ve klasör göndermenizi, güvenle anlık mesajlaşmanızı sağlar.</p>
+            
+            <div class="cta-group">
+                <a href="https://github.com/tommyvercetti89/qbfile/releases/download/v1.0.0/qbfile-portable.exe" class="btn-primary" id="btn-portable-link">
+                    <svg style="width:20px;height:20px;fill:currentColor" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                    <span id="btn-portable-text">Taşınabilir Exe İndir (.exe)</span>
+                </a>
+                <a href="https://github.com/tommyvercetti89/qbfile/releases/download/v1.0.0/qbfile-setup.exe" class="btn-secondary" id="btn-setup-link">
+                    <svg style="width:20px;height:20px;fill:currentColor" viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>
+                    <span id="btn-setup-text">Kurulum Sihirbazı (.exe)</span>
+                </a>
+            </div>
+        </section>
+
+        <!-- Interactive Security Banner -->
+        <section class="security-section" id="security">
+            <div class="security-banner">
+                <div class="security-info">
+                    <h3 id="sec-banner-title">Kriptografik Koruma Kalkanı</h3>
+                    <p id="sec-banner-desc">Uçtan uca şifreli (E2EE) veri taşıma kanalımız, Curve25519 eliptik eğri Diffie-Hellman anahtar anlaşması ve 256-bit AES-GCM simetrik şifrelemesi ile korunur. Matchmaking/Sinyalleşme sunucusu dahi dosyalarınızın veya mesajlarınızın içeriğine asla ulaşamaz.</p>
+                    <div class="security-metrics">
+                        <div class="metric">
+                            <span class="metric-val">ECDH</span>
+                            <span class="metric-lbl" id="sec-lbl-key">Curve25519</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-val">256-Bit</span>
+                            <span class="metric-lbl" id="sec-lbl-aes">AES-GCM Şifreleme</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-val">P2P</span>
+                            <span class="metric-lbl" id="sec-lbl-tunnel">Direkt Soket Akışı</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="security-visual">
+                    <div class="lock-container">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Features Grid -->
+        <section class="features" id="features">
+            <div class="section-header">
+                <h2 id="feat-sec-title">Mühendislik Harikası P2P</h2>
+                <p id="feat-sec-desc">Siber güvenlik standartlarında ve yüksek hızlı veri aktarım mimarisi.</p>
+            </div>
+            
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🛡️</div>
+                    <h3 id="feat-1-title">Kriptografik Arkadaş Yönetimi</h3>
+                    <p id="feat-1-desc">Yabancılar tamamen filtrelenir! 22 karakterlik benzersiz Peer ID'sini eklemediğiniz hiç kimse sizinle iletişim kuramaz veya varlığınızı ağda göremez.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3 id="feat-2-title">Ultra Hızlı P2P Aktarım</h3>
+                    <p id="feat-2-desc">Büyük dosyalar otomatik olarak bellek dostu chunk'lara (parçalara) ayrılır ve doğrudan eşler arası TCP soketleri üzerinden maksimum bant genişliğinde akar.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <h3 id="feat-3-title">Güvenli Yerel Profil Deposu</h3>
+                    <p id="feat-3-desc">Profil adınız, özel durum mesajınız ve arkadaş listeniz bilgisayarınızda AES-256-GCM ile şifrelenmiş bir yerel veri bankasında saklanır.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Timeline Updates -->
+        <section class="updates" id="updates">
+            <div class="section-header">
+                <h2 id="upd-sec-title">Gelişim ve Sürüm Günlüğü</h2>
+                <p id="upd-sec-desc">QBFile'ın gelişim sürecini ve güncellemelerini takip edin.</p>
+            </div>
+
+            <div class="timeline" id="timeline-container">
+                <!-- Timeline items will be injected here -->
+            </div>
+        </section>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <a class="footer-logo" id="footer-logo" href="#">
+            QB<span>File</span>
+        </a>
+        <p id="footer-desc">Bu ürün tommyvercetti89 tarafından geliştirilmiş ve Google DeepMind ekibinin ileri düzey yapay zeka kodlama asistanı Antigravity iş birliğiyle tasarlanmıştır.</p>
+        <p style="font-size: 0.75rem; color: rgba(255,255,255,0.15)">Licensed under the Apache License, Version 2.0. Copyright © 2026. All rights reserved.</p>
+    </footer>
+
+    <!-- ----------------------------------------------------- -->
+    /* HIDDEN ADMIN PANEL OVERLAY HTML */
+    <!-- ----------------------------------------------------- -->
+    <div id="admin-panel">
+        <!-- Password Check Card -->
+        <div class="admin-auth-container" id="admin-auth-screen">
+            <div class="admin-card">
+                <h2>Yönetim Paneli</h2>
+                <p>Web sayfasını canlı olarak düzenlemek için yönetici şifresini girin.</p>
+                <input type="password" id="admin-password-field" class="admin-input" placeholder="Yönetici Şifresi" autofocus>
+                <button type="button" class="admin-btn" id="btn-admin-login">Giriş Yap</button>
+            </div>
+        </div>
+
+        <!-- Dashboard Content -->
+        <div class="dashboard" id="admin-dashboard">
+            <!-- Sidebar Navigation -->
+            <div class="dash-sidebar">
+                <div>
+                    <div class="dash-logo">QB<span>Panel</span></div>
+                    <div class="dash-menu">
+                        <button class="dash-item active" onclick="switchTab('tab-general')">🎨 Genel Görünüm</button>
+                        <button class="dash-item" onclick="switchTab('tab-downloads')">📥 İndirmeler</button>
+                        <button class="dash-item" onclick="switchTab('tab-features')">✨ Özellikler</button>
+                        <button class="dash-item" onclick="switchTab('tab-updates')">📝 Güncellemeler</button>
+                        <button class="dash-item" onclick="switchTab('tab-publish')">🚀 Yayınla</button>
+                    </div>
+                </div>
+                <button type="button" class="btn-close-dash" id="btn-close-panel">Panelden Çık</button>
+            </div>
+
+            <!-- Main Work Area -->
+            <div class="dash-main">
+                <div class="dash-header">
+                    <h2 id="dash-tab-title">Genel Görünüm ve Tasarım</h2>
+                    <button type="button" class="btn-save-export" onclick="exportUpdatedCode()">
+                        <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
+                        HTML Kodu İndir
+                    </button>
+                </div>
+
+                <!-- Tab 1: General Styling and Hero Text -->
+                <div class="tab-panel active" id="tab-general">
+                    <div class="form-group">
+                        <label>Vurgu Rengi Seçin (Tema Rengi)</label>
+                        <div class="color-picker-group">
+                            <div class="color-bubble" style="background:#10b981" onclick="changeThemeAccent('#10b981', this)" id="accent-green"></div>
+                            <div class="color-bubble" style="background:#3b82f6" onclick="changeThemeAccent('#3b82f6', this)"></div>
+                            <div class="color-bubble" style="background:#8b5cf6" onclick="changeThemeAccent('#8b5cf6', this)"></div>
+                            <div class="color-bubble" style="background:#f59e0b" onclick="changeThemeAccent('#f59e0b', this)"></div>
+                            <div class="color-bubble" style="background:#ec4899" onclick="changeThemeAccent('#ec4899', this)"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Hero Rozet Metni</label>
+                        <input type="text" id="inp-badge-text" class="form-control" oninput="updateLive('hero-badge-text', this.value)">
+                    </div>
+                    <div class="form-group">
+                        <label>Ana Başlık (HTML Kullanabilirsiniz)</label>
+                        <input type="text" id="inp-hero-title" class="form-control" oninput="updateLive('hero-title', this.value)">
+                    </div>
+                    <div class="form-group">
+                        <label>Alt Açıklama Yazısı</label>
+                        <textarea id="inp-hero-desc" class="form-control" oninput="updateLive('hero-desc', this.value)"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Güvenlik Bandı Başlığı</label>
+                        <input type="text" id="inp-sec-title" class="form-control" oninput="updateLive('sec-banner-title', this.value)">
+                    </div>
+                    <div class="form-group">
+                        <label>Güvenlik Bandı Açıklaması</label>
+                        <textarea id="inp-sec-desc" class="form-control" oninput="updateLive('sec-banner-desc', this.value)"></textarea>
+                    </div>
+                </div>
+
+                <!-- Tab 2: Downloads Links -->
+                <div class="tab-panel" id="tab-downloads">
+                    <div class="form-group">
+                        <label>Taşınabilir Sürüm (.exe) İndirme Linki</label>
+                        <input type="text" id="inp-portable-link" class="form-control" oninput="updateLink('btn-portable-link', this.value)">
+                    </div>
+                    <div class="form-group">
+                        <label>Taşınabilir Buton Metni</label>
+                        <input type="text" id="inp-portable-text" class="form-control" oninput="updateLive('btn-portable-text', this.value)">
+                    </div>
+                    <div class="form-group">
+                        <label>Kurulum Sihirbazı (.exe) İndirme Linki</label>
+                        <input type="text" id="inp-setup-link" class="form-control" oninput="updateLink('btn-setup-link', this.value)">
+                    </div>
+                    <div class="form-group">
+                        <label>Kurulum Buton Metni</label>
+                        <input type="text" id="inp-setup-text" class="form-control" oninput="updateLive('btn-setup-text', this.value)">
+                    </div>
+                </div>
+
+                <!-- Tab 3: Core Features Section -->
+                <div class="tab-panel" id="tab-features">
+                    <div class="form-group">
+                        <label>Özellikler Bölüm Başlığı</label>
+                        <input type="text" id="inp-feat-sec-title" class="form-control" oninput="updateLive('feat-sec-title', this.value)">
+                    </div>
+                    <div class="form-group">
+                        <label>Özellikler Bölüm Açıklaması</label>
+                        <input type="text" id="inp-feat-sec-desc" class="form-control" oninput="updateLive('feat-sec-desc', this.value)">
+                    </div>
+                    <hr style="border:0;border-top:1px solid var(--card-border);margin:2rem 0">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:2rem">
+                        <div>
+                            <h4 style="margin-bottom:1rem;color:var(--accent-color)">Özellik 1</h4>
+                            <div class="form-group">
+                                <label>Başlık</label>
+                                <input type="text" id="inp-feat1-title" class="form-control" oninput="updateLive('feat-1-title', this.value)">
+                            </div>
+                            <div class="form-group">
+                                <label>Açıklama</label>
+                                <textarea id="inp-feat1-desc" class="form-control" oninput="updateLive('feat-1-desc', this.value)"></textarea>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 style="margin-bottom:1rem;color:var(--accent-color)">Özellik 2</h4>
+                            <div class="form-group">
+                                <label>Başlık</label>
+                                <input type="text" id="inp-feat2-title" class="form-control" oninput="updateLive('feat-2-title', this.value)">
+                            </div>
+                            <div class="form-group">
+                                <label>Açıklama</label>
+                                <textarea id="inp-feat2-desc" class="form-control" oninput="updateLive('feat-2-desc', this.value)"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 4: Updates & Chronology -->
+                <div class="tab-panel" id="tab-updates">
+                    <h4 style="margin-bottom:1rem;color:var(--accent-color)">Yeni Güncelleme Ekle</h4>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem">
+                        <div class="form-group" style="margin-bottom:0">
+                            <label>Sürüm/Başlık</label>
+                            <input type="text" id="inp-upd-new-title" class="form-control" placeholder="v1.1.0 Yeni Özellikler">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0">
+                            <label>Tarih</label>
+                            <input type="text" id="inp-upd-new-date" class="form-control" placeholder="18 Mayıs 2026">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Güncelleme Açıklaması</label>
+                        <textarea id="inp-upd-new-desc" class="form-control" placeholder="Bu sürümde aktarım hızları optimize edildi..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Etiketler (Virgülle ayırın)</label>
+                        <input type="text" id="inp-upd-new-tags" class="form-control" placeholder="P2P, E2EE, Fix">
+                    </div>
+                    <button type="button" class="admin-btn" style="margin-bottom:2.5rem" onclick="addNewUpdateEntry()">Ekle</button>
+
+                    <h4 style="margin-bottom:1rem;color:var(--text-muted)">Mevcut Sürümler</h4>
+                    <div id="admin-updates-list-wrapper">
+                        <!-- Dynamic editable items list -->
+                    </div>
+                </div>
+
+                <!-- Tab 5: Publishing details -->
+                <div class="tab-panel" id="tab-publish">
+                    <h3 style="font-size:1.75rem;font-weight:900;margin-bottom:1rem">Yapılan Değişiklikleri Tamamen Kalıcı Hale Getir</h3>
+                    <p style="color:var(--text-muted);margin-bottom:2rem;line-height:1.7">Aşağıdaki butona tıkladığında, yaptığın tüm renk, başlık, dil ve içerik değişiklikleri doğrudan **index.html** kaynak koduna varsayılan ve kalıcı olarak kodlanır. İndirdiğin bu yeni **index.html** dosyasını projenin **WEB** klasöründeki dosya ile değiştirdiğinde değişikliklerin tüm dünyada yayına alınmaya hazır olacaktır!</p>
+                    
+                    <button type="button" class="admin-btn" style="padding:1.25rem 2rem;font-size:1.1rem" onclick="exportUpdatedCode()">
+                        🚀 Üretim Kodunu (index.html) Oluştur ve İndir
+                    </button>
+
+                    <div class="publish-success-message" id="publish-success-banner">
+                        <h4>🎉 index.html Başarıyla Oluşturuldu!</h4>
+                        <p>İndirilen yeni index.html dosyasını projedeki eski dosya ile değiştirip GitHub reponuza push'ladığınızda tüm değişiklikler canlıya yansıyacaktır. Admin şifrenizi her zaman kullanmaya devam edebilirsiniz!</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ----------------------------------------------------- -->
+    /* DYNAMIC LANDING STATE & ENGINE JAVASCRIPT */
+    <!-- ----------------------------------------------------- -->
+    <script>
+        // Core application default state
+        const defaultState = {
+            accentColor: "#10b981",
+            badgeText: "v1.0.0 Kararlı Sürüm Yayında",
+            heroTitle: "Sıfır İfşa, <span>Maksimum Gizlilik.</span>",
+            heroDesc: "QBFile, yerel ağınızda veya internet üzerinde uçtan uca şifreli (E2EE) olarak P2P dosya ve klasör göndermenizi, güvenle anlık mesajlaşmanızı sağlar.",
+            portableLink: "https://github.com/tommyvercetti89/qbfile/releases/download/v1.0.0/qbfile-portable.exe",
+            portableText: "Taşınabilir Exe İndir (.exe)",
+            setupLink: "https://github.com/tommyvercetti89/qbfile/releases/download/v1.0.0/qbfile-setup.exe",
+            setupText: "Kurulum Sihirbazı (.exe)",
+            secTitle: "Kriptografik Koruma Kalkanı",
+            secDesc: "Uçtan uca şifreli (E2EE) veri taşıma kanalımız, Curve25519 eliptik eğri Diffie-Hellman anahtar anlaşması ve 256-bit AES-GCM simetrik şifrelemesi ile korunur. Matchmaking/Sinyalleşme sunucusu dahi dosyalarınızın veya mesajlarınızın içeriğine asla ulaşamaz.",
+            featSecTitle: "Mühendislik Harikası P2P",
+            featSecDesc: "Siber güvenlik standartlarında ve yüksek hızlı veri aktarım mimarisi.",
+            feat1Title: "Kriptografik Arkadaş Yönetimi",
+            feat1Desc: "Yabancılar tamamen filtrelenir! 22 karakterlik benzersiz Peer ID'sini eklemediğiniz hiç kimse sizinle iletişim kuramaz veya varlığınızı ağda göremez.",
+            feat2Title: "Ultra Hızlı P2P Aktarım",
+            feat2Desc: "Büyük dosyalar otomatik olarak bellek dostu chunk'lara (parçalara) ayrılır ve doğrudan eşler arası TCP soketleri üzerinden maksimum bant genişliğinde akar.",
+            feat3Title: "Güvenli Yerel Profil Deposu",
+            feat3Desc: "Profil adınız, özel durum mesajınız ve arkadaş listeniz bilgisayarınızda AES-256-GCM ile şifrelenmiş bir yerel veri bankasında saklanır.",
+            updates: [
+                {
+                    title: "v1.0.0 Kararlı Üretim Sürümü",
+                    date: "18 Mayıs 2026",
+                    desc: "Uçtan uca şifreli (E2EE) transferler, eliptik eğrili arkadaş doğrulama filtreleri, şifreli profil kasası ve tam yerelleştirilmiş glassmorphism kullanıcı arayüzü ile ilk kararlı sürüm başarıyla yayınlandı.",
+                    tags: ["P2P", "E2EE", "Release"]
+                },
+                {
+                    title: "v1.0.0-rc2 Hata Giderme ve Performans Sürümü",
+                    date: "17 Mayıs 2026",
+                    desc: "UUID tabanlı Peer ID üretimlerindeki Sprintf byte dizilimi hatası giderildi, çevrimdışı arkadaş arayüz kartları otomatik-tamir yeteneği ile donatıldı.",
+                    tags: ["Fix", "Security", "Core"]
+                }
+            ]
+        };
+
+        let appState = {};
+
+        // On Load, read from LocalStorage or inject default state
+        window.addEventListener('DOMContentLoaded', () => {
+            const saved = localStorage.getItem('qbfile_web_state');
+            if (saved) {
+                appState = JSON.parse(saved);
+            } else {
+                appState = JSON.parse(JSON.stringify(defaultState));
+            }
+            applyStateToDOM();
+            renderUpdatesTimeline();
+            populateFormFields();
+
+            // Keyboard shortcut for admin login: Ctrl + Shift + A
+            window.addEventListener('keydown', (e) => {
+                if (e.ctrlKey && e.shiftKey && e.code === 'KeyA') {
+                    openAdminPanel();
+                }
+            });
+
+            // Double click logo to login as well (Easter egg)
+            document.getElementById('header-logo').addEventListener('dblclick', openAdminPanel);
+            document.getElementById('footer-logo').addEventListener('dblclick', openAdminPanel);
+
+            // Bind click actions
+            document.getElementById('btn-admin-login').addEventListener('click', handleAdminLogin);
+            document.getElementById('btn-close-panel').addEventListener('click', closeAdminPanel);
+            document.getElementById('admin-password-field').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleAdminLogin();
+            });
+        });
+
+        // Inject state values into front-end DOM elements
+        function applyStateToDOM() {
+            // Apply accent theme styles dynamically
+            document.documentElement.style.setProperty('--accent-color', appState.accentColor);
+            const r = parseInt(appState.accentColor.substr(1,2), 16);
+            const g = parseInt(appState.accentColor.substr(3,2), 16);
+            const b = parseInt(appState.accentColor.substr(5,2), 16);
+            document.documentElement.style.setProperty('--accent-glow', `rgba(${r}, ${g}, ${b}, 0.15)`);
+
+            document.getElementById('hero-badge-text').innerText = appState.badgeText;
+            document.getElementById('hero-title').innerHTML = appState.heroTitle;
+            document.getElementById('hero-desc').innerText = appState.heroDesc;
+
+            document.getElementById('btn-portable-link').href = appState.portableLink;
+            document.getElementById('btn-portable-text').innerText = appState.portableText;
+            document.getElementById('btn-setup-link').href = appState.setupLink;
+            document.getElementById('btn-setup-text').innerText = appState.setupText;
+
+            document.getElementById('sec-banner-title').innerText = appState.secTitle;
+            document.getElementById('sec-banner-desc').innerText = appState.secDesc;
+
+            document.getElementById('feat-sec-title').innerText = appState.featSecTitle;
+            document.getElementById('feat-sec-desc').innerText = appState.featSecDesc;
+
+            document.getElementById('feat-1-title').innerText = appState.feat1Title;
+            document.getElementById('feat-1-desc').innerText = appState.feat1Desc;
+            document.getElementById('feat-2-title').innerText = appState.feat2Title;
+            document.getElementById('feat-2-desc').innerText = appState.feat2Desc;
+            document.getElementById('feat-3-title').innerText = appState.feat3Title;
+            document.getElementById('feat-3-desc').innerText = appState.feat3Desc;
+        }
+
+        // Render timeline chronological items
+        function renderUpdatesTimeline() {
+            const container = document.getElementById('timeline-container');
+            container.innerHTML = '';
+            
+            appState.updates.forEach(item => {
+                const tagsHTML = item.tags.map(t => `<span class="tag">${t}</span>`).join('');
+                const el = document.createElement('div');
+                el.className = 'timeline-item';
+                el.innerHTML = `
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-date">${item.date}</div>
+                    <div class="timeline-content">
+                        <h3>${item.title}</h3>
+                        <p>${item.desc}</p>
+                        <div class="timeline-tags">${tagsHTML}</div>
+                    </div>
+                `;
+                container.appendChild(el);
+            });
+        }
+
+        // Fill admin inputs with state values
+        function populateFormFields() {
+            document.getElementById('inp-badge-text').value = appState.badgeText;
+            document.getElementById('inp-hero-title').value = appState.heroTitle;
+            document.getElementById('inp-hero-desc').value = appState.heroDesc;
+
+            document.getElementById('inp-sec-title').value = appState.secTitle;
+            document.getElementById('inp-sec-desc').value = appState.secDesc;
+
+            document.getElementById('inp-portable-link').value = appState.portableLink;
+            document.getElementById('inp-portable-text').value = appState.portableText;
+            document.getElementById('inp-setup-link').value = appState.setupLink;
+            document.getElementById('inp-setup-text').value = appState.setupText;
+
+            document.getElementById('inp-feat-sec-title').value = appState.featSecTitle;
+            document.getElementById('inp-feat-sec-desc').value = appState.featSecDesc;
+
+            document.getElementById('inp-feat1-title').value = appState.feat1Title;
+            document.getElementById('inp-feat1-desc').value = appState.feat1Desc;
+            document.getElementById('inp-feat2-title').value = appState.feat2Title;
+            document.getElementById('inp-feat2-desc').value = appState.feat2Desc;
+
+            renderAdminUpdatesList();
+        }
+
+        // Render simple list in Updates tab in admin panel
+        function renderAdminUpdatesList() {
+            const listWrapper = document.getElementById('admin-updates-list-wrapper');
+            listWrapper.innerHTML = '';
+
+            appState.updates.forEach((item, index) => {
+                const el = document.createElement('div');
+                el.className = 'admin-list-item';
+                el.innerHTML = `
+                    <div>
+                        <div class="admin-list-item-title">${item.title}</div>
+                        <div class="admin-list-item-date">${item.date}</div>
+                    </div>
+                    <button class="btn-delete-item" onclick="deleteUpdateEntry(${index})">Sil</button>
+                `;
+                listWrapper.appendChild(el);
+            });
+        }
+
+        // Live update functions as administrator types
+        function updateLive(id, val) {
+            appState[camelize(id)] = val;
+            if (id === 'hero-title') {
+                document.getElementById(id).innerHTML = val;
+            } else {
+                document.getElementById(id).innerText = val;
+            }
+            saveToLocal();
+        }
+
+        function updateLink(id, val) {
+            appState[camelize(id)] = val;
+            document.getElementById(id).href = val;
+            saveToLocal();
+        }
+
+        function changeThemeAccent(hex, el) {
+            appState.accentColor = hex;
+            document.documentElement.style.setProperty('--accent-color', hex);
+            const bubbles = document.querySelectorAll('.color-bubble');
+            bubbles.forEach(b => b.classList.remove('active'));
+            el.classList.add('active');
+
+            // Apply glow
+            const r = parseInt(hex.substr(1,2), 16);
+            const g = parseInt(hex.substr(3,2), 16);
+            const b = parseInt(hex.substr(5,2), 16);
+            document.documentElement.style.setProperty('--accent-glow', `rgba(${r}, ${g}, ${b}, 0.15)`);
+            saveToLocal();
+        }
+
+        // Helper to map kebab-case to camelCase
+        function camelize(str) {
+            const mappings = {
+                'hero-badge-text': 'badgeText',
+                'hero-title': 'heroTitle',
+                'hero-desc': 'heroDesc',
+                'btn-portable-link': 'portableLink',
+                'btn-portable-text': 'portableText',
+                'btn-setup-link': 'setupLink',
+                'btn-setup-text': 'setupText',
+                'sec-banner-title': 'secTitle',
+                'sec-banner-desc': 'secDesc',
+                'feat-sec-title': 'featSecTitle',
+                'feat-sec-desc': 'featSecDesc',
+                'feat-1-title': 'feat1Title',
+                'feat-1-desc': 'feat1Desc',
+                'feat-2-title': 'feat2Title',
+                'feat-2-desc': 'feat2Desc',
+                'feat-3-title': 'feat3Title',
+                'feat-3-desc': 'feat3Desc'
+            };
+            return mappings[str] || str;
+        }
+
+        function saveToLocal() {
+            localStorage.setItem('qbfile_web_state', JSON.stringify(appState));
+        }
+
+        // Add/Remove update logs
+        function addNewUpdateEntry() {
+            const title = document.getElementById('inp-upd-new-title').value.trim();
+            const date = document.getElementById('inp-upd-new-date').value.trim();
+            const desc = document.getElementById('inp-upd-new-desc').value.trim();
+            const tagsVal = document.getElementById('inp-upd-new-tags').value.trim();
+
+            if (!title || !date || !desc) {
+                alert('Lütfen sürüm başlığı, tarihi ve açıklamasını doldurun!');
+                return;
+            }
+
+            const tags = tagsVal ? tagsVal.split(',').map(t => t.trim()) : [];
+            appState.updates.unshift({ title, date, desc, tags });
+            
+            saveToLocal();
+            renderUpdatesTimeline();
+            renderAdminUpdatesList();
+
+            // Clear inputs
+            document.getElementById('inp-upd-new-title').value = '';
+            document.getElementById('inp-upd-new-date').value = '';
+            document.getElementById('inp-upd-new-desc').value = '';
+            document.getElementById('inp-upd-new-tags').value = '';
+        }
+
+        function deleteUpdateEntry(index) {
+            if (confirm('Bu sürüm günlüğünü silmek istediğinize emin misiniz?')) {
+                appState.updates.splice(index, 1);
+                saveToLocal();
+                renderUpdatesTimeline();
+                renderAdminUpdatesList();
+            }
+        }
+
+        // Navigation Tabs in Admin Dashboard
+        function switchTab(tabId) {
+            const panels = document.querySelectorAll('.tab-panel');
+            panels.forEach(p => p.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+
+            const menuButtons = document.querySelectorAll('.dash-item');
+            menuButtons.forEach(btn => btn.classList.remove('active'));
+            
+            // Map tabId to active item header
+            const tabTitles = {
+                'tab-general': 'Genel Görünüm ve Tasarım',
+                'tab-downloads': 'İndirmeler ve Linkler',
+                'tab-features': 'Temel Özellikleri Düzenle',
+                'tab-updates': 'Sürüm Günlüklerini Yönet',
+                'tab-publish': 'Değişiklikleri Canlıya Al'
+            };
+            document.getElementById('dash-tab-title').innerText = tabTitles[tabId];
+            event.currentTarget.classList.add('active');
+        }
+
+        // Overlay visibility controls
+        function openAdminPanel() {
+            document.getElementById('admin-panel').style.display = 'block';
+            document.getElementById('admin-password-field').focus();
+        }
+
+        function closeAdminPanel() {
+            document.getElementById('admin-panel').style.display = 'none';
+            // Clean auth screen
+            document.getElementById('admin-auth-screen').style.display = 'flex';
+            document.getElementById('admin-dashboard').style.display = 'none';
+            document.getElementById('admin-password-field').value = '';
+        }
+
+        function handleAdminLogin() {
+            const pwd = document.getElementById('admin-password-field').value;
+            if (pwd === 'admin123') { // Simple password protect
+                document.getElementById('admin-auth-screen').style.display = 'none';
+                document.getElementById('admin-dashboard').style.display = 'grid';
+            } else {
+                alert('Hatalı Yönetici Şifresi! Lütfen tekrar deneyin.');
+            }
+        }
+
+        // -----------------------------------------------------
+        // Sihirli Metot: Değişiklikleri HTML'in İçine Kodlayıp Dışa Aktarır!
+        // -----------------------------------------------------
+        function exportUpdatedCode() {
+            // Get original source code of this page
+            let source = document.documentElement.outerHTML;
+
+            // Generate clean script states
+            const cleanStateString = `const defaultState = ${JSON.stringify(appState, null, 8)};`;
+            
+            // Extract the original defaultState block and swap it with current customized appState!
+            const regex = /const\s+defaultState\s*=\s*\{[\s\S]*?\};/;
+            source = source.replace(regex, cleanStateString);
+
+            // Package the HTML template together
+            const finalHTML = `<!DOCTYPE html>\n<html lang="tr">\n${source}\n</html>`;
+
+            // Trigger safe file download in browser
+            const blob = new Blob([finalHTML], { type: 'text/html;charset=utf-8' });
+            const tempLink = document.createElement('a');
+            tempLink.href = URL.createObjectURL(blob);
+            tempLink.download = 'index.html';
+            document.body.appendChild(tempLink);
+            tempLink.click();
+            document.body.removeChild(tempLink);
+
+            // Show glorious neon success message
+            const successBanner = document.getElementById('publish-success-banner');
+            if (successBanner) {
+                successBanner.style.display = 'block';
+                setTimeout(() => {
+                    successBanner.style.display = 'none';
+                }, 10000);
+            }
+        }
+    </script>
+</body>
+</html>
