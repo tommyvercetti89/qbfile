@@ -29,9 +29,10 @@ ehthumbs.db
 Desktop.ini
 .DS_Store
 
-# Installer and temp directories
+# Installer, web pages, and temp directories
 Output/
 *.enc
 *.log
 *.tmp
 temp/
+WEB/
