@@ -1,104 +1,106 @@
-# 🛡️ QBFile - Uçtan Uca Şifreli (E2EE) P2P Dosya Aktarım ve Sohbet Sistemi
+# 🛡️ QBFile - End-to-End Encrypted (E2EE) P2P File Transfer & Chat System
+
+🇹🇷 [Türkçe Dökümantasyon](README.tr.md)
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8.svg?style=flat&logo=go)](https://golang.org)
 [![Svelte](https://img.shields.io/badge/Svelte-4.0+-FF3E00.svg?style=flat&logo=svelte)](https://svelte.dev)
 [![Wails](https://img.shields.io/badge/Wails-2.0+-red.svg)](https://wails.io)
 
-QBFile; hem yerel ağlarda (LAN) hem de internet üzerinde (WAN) sıfır-bilgi (zero-knowledge) gizlilik prensibiyle çalışan, yüksek performanslı, **Uçtan Uca Şifreli (E2EE) eşler arası (P2P) dosya aktarım ve anlık mesajlaşma** uygulamasıdır. 
+QBFile is a high-performance, **End-to-End Encrypted (E2EE) peer-to-peer (P2P) file transfer and instant messaging** utility built with a zero-knowledge privacy-first architecture, functioning seamlessly across local area networks (LAN) and the global internet (WAN).
 
 ---
 
-## 💎 Temel Özellikler
+## 💎 Core Features
 
-### 🔒 1. Üst Düzey Güvenlik ve Kriptografi
-* **Uçtan Uca Şifreleme (E2EE)**: Tüm dosya aktarımları ve mesajlar, eliptik eğri Diffie-Hellman (**ECDH - Curve25519**) anahtar anlaşması ve **256-bit AES-GCM** simetrik şifreleme algoritması ile cihazlar arasında doğrudan şifrelenir.
-* **Şifreli Yerel Profil**: Kullanıcı isimleri, durum mesajları ve arkadaş listeleri yerel diskte **AES-256-GCM** ile şifrelenmiş olarak saklanır. Şifre çözülmeden hiç kimse yerel profilinize erişemez.
-* **Sıfır-Bilgi Sinyalleşmesi**: Çöpçatan (matchmaking) sunucusu aktarılan dosyaları veya mesajları **asla göremez, kaydedemez veya araya giremez**. Sadece bağlantıyı koordine eder.
+### 🔒 1. High-Grade Security & Cryptography
+* **End-to-End Encryption (E2EE)**: All files, directories, and chat messages are encrypted directly between devices using Elliptic-Curve Diffie-Hellman (**ECDH - Curve25519**) key exchange and **256-bit AES-GCM** symmetric encryption.
+* **Encrypted Local Storage**: User profile parameters, status messages, and friend databases are stored securely on disk using **AES-256-GCM**. No unauthorized local users can access your profile database.
+* **Zero-Knowledge Signaling**: The lightweight matchmaking/signaling server **never sees, logs, or intercepts** any transmitted data or E2EE payloads; it only acts as a secure network handshake coordinator.
 
-### 👥 2. Kriptografik Arkadaş Yönetim Sistemi (Gizlilik Kalkanı)
-* **Yabancı Engelleme (Strangers Filtered)**: Matchmaking sunucusuna bağlı olsanız bile, **birbirinizin 22 karakterlik benzersiz Peer ID'sini eklemediğiniz sürece** kimse sizi göremez veya sizinle iletişime geçemez.
-* **Gelişmiş Keşif Filtresi**: Ağ paketleri arka planda süzülerek sadece izin verdiğiniz kriptografik açık anahtarlara (Public Key) sahip peer'ların çevrimiçi durumları arayüze yansıtılır.
-* **Çevrimdışı Bellek**: Eklediğiniz arkadaşlar ağda olmasalar bile "Çevrimdışı" statüsüyle arayüzde listelenmeye devam eder; böylece geçmiş konuşmaları her an okuyabilirsiniz.
+### 👥 2. Cryptographic Friend System (Privacy Shield)
+* **Strangers Blocked by Default**: Even when connected to the public matchmaking network, **peers will never discover or view each other unless they explicitly add one another** via their 22-character unique Peer ID.
+* **Keşif Filtresi (Discovery Filtering)**: Network packets are securely filtered in the backend. Only authenticated peers mapped to your active friend keys will trigger a UI presence.
+* **Offline Vault Memory**: Added friends remain visible as "Offline" with elegant frosted-glass styling even when disconnected, allowing you to access historic chats at any time.
 
-### 📂 3. Ultra Hızlı P2P Dosya ve Klasör Transferi
-* **Büyük Dosya Desteği**: Dosyalar bellek dostu chunk'lara (parçalara) bölünerek soketler üzerinden yüksek hızda akar.
-* **Klasör Sıkıştırma (Zip)**: Klasör gönderimlerinde sistem arka planda klasörü otomatik olarak sıkıştırıp gönderir ve alıcı tarafta şifreyi çözerek klasör hiyerarşisini bozmadan çıkarır.
-* **Gelişmiş Kontrol**: Dosya transferlerini dilediğiniz an duraklatabilir (pause), devam ettirebilir (resume) veya iptal edebilirsiniz.
+### 📂 3. High-Speed P2P File & Folder Transfer
+* **Large File Optimizations**: Stream massive files smoothly via structured, memory-friendly chunked transfers over secure raw TCP sockets.
+* **Automatic Directory Zipping**: Folders are zipped on-the-fly, transferred securely, and automatically extracted at the recipient's destination maintaining structure.
+* **Granular Flow Control**: Pause, resume, or cancel active file transfers instantaneously with micro-second responsiveness.
 
-### 🎨 4. Premium Arayüz ve Kullanıcı Deneyimi (UI/UX)
-* **Glassmorphism Arayüzü**: Buzlu cam efektleri (backdrop blur), premium renk geçişleri ve akıcı mikro animasyonlar ile göz alıcı karanlık mod tasarımı.
-* **Renk Paletleri**: Kişiselleştirilebilir neon yeşili, siber mavi, mor, altın ve sakura pembesi gibi 5 farklı premium vurgu rengi seçeneği.
-* **Dil Desteği**: Türkçe ve İngilizce dilleri arasında dinamik olarak geçiş yapabilen çok dilli yapı.
+### 🎨 4. Premium Aesthetic & UI/UX Experience
+* **Glassmorphism Interface**: Sleek dark mode featuring gorgeous frosted-glass panels (`backdrop-filter: blur`), glowing neon indicators, and fluid CSS micro-animations.
+* **Accent Colors**: Custom color themes including Cyber Green, Cobalt Blue, Neon Purple, Rich Gold, and Sakura Pink.
+* **Localization**: Fully localized dynamic language switcher offering English and Turkish (TR) experiences out of the box.
 
 ---
 
-## 🏗️ Sistem Mimarisi
+## 🏗️ Architecture
 
 ```mermaid
 graph TD
-    subgraph Cihaz A (İstemci)
-        A1[Kullanıcı Arayüzü - Svelte] <--> A2[Go Backend Core]
-        A2 <--> A3[(AES-256 Şifreli Profil)]
+    subgraph Device A (Client)
+        A1[User Interface - Svelte] <--> A2[Go Backend Core]
+        A2 <--> A3[(AES-256 Encrypted Profile)]
     end
     
-    subgraph İnternet (WAN) / LAN
-        S[Sinyalleşme ve Relay Sunucusu]
+    subgraph Global WAN / LAN
+        S[Matchmaking & Relay Server]
     end
     
-    subgraph Cihaz B (İstemci)
-        B1[Kullanıcı Arayüzü - Svelte] <--> B2[Go Backend Core]
-        B2 <--> B3[(AES-256 Şifreli Profil)]
+    subgraph Device B (Client)
+        B1[User Interface - Svelte] <--> B2[Go Backend Core]
+        B2 <--> B3[(AES-256 Encrypted Profile)]
     end
     
-    A2 <-->|1. Güvenli El Sıkışma & ECDH| S
-    B2 <-->|1. Güvenli El Sıkışma & ECDH| S
-    A2 ====|2. E2EE AES-GCM P2P Aktarım| B2
+    A2 <-->|1. Handshake & ECDH negotiation| S
+    B2 <-->|1. Handshake & ECDH negotiation| S
+    A2 ====|2. Direct E2EE AES-GCM P2P Stream| B2
 ```
 
 ---
 
-## 🛠️ Kurulum ve Derleme Kılavuzu
+## 🛠️ Development & Compilation Guide
 
-### Gereksinimler
-* **Go** (v1.21 veya üzeri)
-* **Node.js** (v18 veya üzeri)
-* **Wails CLI** (Kurulum için: `go install github.com/wailsapp/wails/v2/cmd/wails@latest`)
+### Prerequisites
+* **Go** (v1.21 or higher)
+* **Node.js** (v18 or higher)
+* **Wails CLI** (Install via: `go install github.com/wailsapp/wails/v2/cmd/wails@latest`)
 
-### 1. Canlı Geliştirme Modu (Live Dev)
-Uygulamayı geliştirme modunda çalıştırmak ve anlık arayüz güncellemelerini görmek için:
+### 1. Live Development Mode
+Run the application in hot-reload live development mode:
 ```bash
 cd qbfile
 wails dev
 ```
 
-### 2. Üretim Sürümü (Production Build)
-Uygulamayı tek bir taşınabilir (portable) Windows çalıştırılabilir dosyasına (`.exe`) dönüştürmek için:
+### 2. Building Production Binary
+To build a highly optimized, single portable Windows executable (`.exe`):
 ```bash
 wails build
 ```
 
 ---
 
-## 🛡️ Güvenli Dağıtım ve Özel Sunucu Gömme
+## 🛡️ Secure Deployment & Remote Server Injections
 
-Projeyi GitHub'da açık kaynak olarak paylaşırken **kendi sunucunuzun IP adresini ifşa etmemek** ve arkadaşlarınızın ek bir ayar yapmadan doğrudan sunucunuza bağlanmasını sağlamak için harika bir Go Linker özelliği kullanılmaktadır:
+When publicizing your project on GitHub, you can **protect your signaling server's IP address** while keeping the client binary fully pre-configured for friends by compiling with Linker flags:
 
-Derleme yaparken terminalde kendi IP adresinizi şu şekilde parametre olarak geçebilirsiniz:
+Simply execute this build command inside your local environment before distribution:
 ```bash
-wails build -ldflags "-X main.DefaultWANServer=SUNUCU_IP_ADRESINIZ:12130"
+wails build -ldflags "-X main.DefaultWANServer=YOUR_SERVER_IP:12130"
 ```
-Bu komut, kaynak kodunuzdaki generic localhost IP'sini değiştirmeden, sadece üretilen `.exe` dosyasına sunucu adresinizi gömer. Kodlarınız GitHub'da %100 temiz kalır!
+This compilation dynamically binds your private signaling endpoint directly to the built `.exe` without altering the generic localhost configurations in the Git history!
 
 ---
 
-## 📜 Lisans
+## 📜 License
 
-Bu proje **Apache License 2.0** ile lisanslanmıştır. Detaylar için [LICENSE](LICENSE) dosyasına göz atabilirsiniz.
+This project is licensed under the **Apache License 2.0**. For more details, see the [LICENSE](LICENSE) file.
 
 ---
 
-## 🤝 Katkıda Bulunanlar
+## 🤝 Credits & Acknowledgements
 
-* **Geliştirici / Proje Sahibi**: [tommyvercetti89](https://github.com/tommyvercetti89)
-* **Yapay Zeka Mimarı**: Bu proje, **Antigravity** (Google Deepmind ekibi tarafından geliştirilen gelişmiş yapay zeka asistanı) iş birliği ile tasarlanmış ve kodlanmıştır.
+* **Developer / Owner**: [tommyvercetti89](https://github.com/tommyvercetti89)
+* **AI Architecture & Collaborator**: This project was developed in close pair-programming collaboration with **Antigravity** (Google Deepmind's Advanced Agentic Coding AI).
