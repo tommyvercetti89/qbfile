@@ -257,8 +257,20 @@ func (a *App) AddFriend(friendIDOrKey string) error {
 		return fmt.Errorf("arkadaş kaydedilemedi: %w", err)
 	}
 
+	// Trigger immediate friend request signal via WAN
+	if a.wanService != nil {
+		go a.wanService.SendFriendRequest(fClean)
+	}
+
 	a.EmitCombinedPeers()
 	return nil
+}
+
+// SendFriendRequest sends a friend request signal to a specific peer ID via WAN
+func (a *App) SendFriendRequest(targetPeerID string) {
+	if a.wanService != nil {
+		a.wanService.SendFriendRequest(targetPeerID)
+	}
 }
 
 // RemoveFriend removes a friend's Peer ID or Public Key Hex from the persistent profile

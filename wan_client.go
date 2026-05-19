@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -101,6 +102,7 @@ type WANService struct {
 	txFilePaths      map[string]string            // Target paths for receiving
 	txBytesRecv      map[string]int64
 	txLastTime       map[string]time.Time
+	sentRequests     map[string]time.Time         // Tracks last sent friend request per peer to prevent spamming
 }
 
 func NewWANService(app *App) *WANService {
@@ -116,6 +118,7 @@ func NewWANService(app *App) *WANService {
 		txFilePaths:      make(map[string]string),
 		txBytesRecv:      make(map[string]int64),
 		txLastTime:       make(map[string]time.Time),
+		sentRequests:     make(map[string]time.Time),
 	}
 }
 
@@ -321,10 +324,40 @@ func (w *WANService) updatePeers(list []*PeerInfo) {
 	w.mu.Unlock()
 
 	w.app.EmitCombinedPeers()
+
+	// Automatically announce ourselves (send friend request signal) to online friends
+	w.app.mu.Lock()
+	if w.app.profile != nil && w.app.profile.Friends != nil {
+		w.mu.Lock()
+		for _, f := range w.app.profile.Friends {
+			if _, online := w.peers[f]; online {
+				lastSent, exists := w.sentRequests[f]
+				if !exists || time.Since(lastSent) > 2*time.Minute {
+					w.sentRequests[f] = time.Now()
+					go w.SendFriendRequest(f)
+				}
+			}
+		}
+		w.mu.Unlock()
+	}
+	w.app.mu.Unlock()
 }
 
 func (w *WANService) handleSignal(senderID string, sig *WANSignalPayload) {
 	switch sig.Type {
+	case "friend_request":
+		if w.app.isFriend(senderID, sig.SenderPubKey) {
+			return
+		}
+		if w.app.ctx != nil {
+			w.app.transferManager.playNotificationSound("request")
+			runtime.EventsEmit(w.app.ctx, "incoming_friend_request", map[string]interface{}{
+				"peer_id":   senderID,
+				"username":  sig.SenderName,
+				"pub_key":   hex.EncodeToString(sig.SenderPubKey),
+			})
+		}
+
 	case "handshake":
 		w.mu.Lock()
 		w.incomingTxs[sig.TransferID] = sig
@@ -775,4 +808,19 @@ func (w *WANService) ResumeTransfer(transferID string) {
 		return
 	}
 	w.mu.Unlock()
+}
+
+// SendFriendRequest sends a friend request signal to another peer via WAN
+func (w *WANService) SendFriendRequest(targetPeerID string) {
+	w.mu.RLock()
+	username := w.username
+	pubKey := w.publicKey
+	w.mu.RUnlock()
+
+	w.sendSignal(targetPeerID, &WANSignalPayload{
+		Type:         "friend_request",
+		TransferID:   w.peerID, // use our peer ID as transfer ID for the request
+		SenderName:   username,
+		SenderPubKey: pubKey,
+	})
 }

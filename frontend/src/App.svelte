@@ -63,6 +63,8 @@
   let transfers = [];
   let searchQuery = "";
   let selectedPeer = null;
+  let viewMode = 'chat'; // 'chat' or 'transfers'
+  let friendRequests = [];
   
   // Incoming Request Modal State
   let incomingRequest = null;
@@ -148,7 +150,18 @@
       actionPause: "⏸️ Duraklat",
       actionResume: "▶️ Devam Et",
       rightClickReady: "Sağ tık ile seçilen öge gönderilmeye hazır:",
-      btnSendNow: "Şimdi Gönder"
+      btnSendNow: "Şimdi Gönder",
+      myConnections: "Bağlantılarım",
+      deleteFriend: "Arkadaşı Sil",
+      deleteFriendTitle: "Arkadaşı Listemden Sil",
+      addFriend: "Arkadaş Ekle",
+      sentItems: "Gönderilenler",
+      friendRequests: "Gelen Arkadaşlık İstekleri",
+      acceptBtnShort: "Kabul Et",
+      rejectBtnShort: "Reddet",
+      noTransfersYet: "Henüz transfer bulunmuyor.",
+      allTransfersDashboard: "Tüm Transferler Paneli",
+      transferHistorySub: "Gönderdiğiniz ve aldığınız dosyaların geçmişi"
     },
     en: {
       settingsTitle: "Application Settings",
@@ -214,7 +227,18 @@
       actionPause: "⏸️ Pause",
       actionResume: "▶️ Resume",
       rightClickReady: "Right-click selected item is ready to send:",
-      btnSendNow: "Send Now"
+      btnSendNow: "Send Now",
+      myConnections: "My Connections",
+      deleteFriend: "Delete Friend",
+      deleteFriendTitle: "Remove Friend from My List",
+      addFriend: "Add Friend",
+      sentItems: "Sent Items",
+      friendRequests: "Incoming Friend Requests",
+      acceptBtnShort: "Accept",
+      rejectBtnShort: "Decline",
+      noTransfersYet: "No transfers yet.",
+      allTransfersDashboard: "All Transfers Dashboard",
+      transferHistorySub: "History of files sent and received"
     }
   };
 
@@ -356,6 +380,15 @@
       GetDownloadsFolder().then(folder => {
         targetSaveDir = folder;
       });
+    });
+
+    EventsOn("incoming_friend_request", (req) => {
+      if (req && req.peer_id) {
+        if (!friendRequests.some(r => r.peer_id === req.peer_id)) {
+          friendRequests = [...friendRequests, req];
+          playNotificationSound('request');
+        }
+      }
     });
   });
 
@@ -539,6 +572,21 @@
     }
   }
 
+  async function acceptFriendRequest(req) {
+    if (!req || !req.peer_id) return;
+    try {
+      await AddFriend(req.peer_id);
+      friendRequests = friendRequests.filter(r => r.peer_id !== req.peer_id);
+    } catch (err) {
+      alert("İstek kabul edilemedi: " + err);
+    }
+  }
+
+  function rejectFriendRequest(req) {
+    if (!req || !req.peer_id) return;
+    friendRequests = friendRequests.filter(r => r.peer_id !== req.peer_id);
+  }
+
   async function handleRemoveFriend(peer) {
     if (!peer) return;
     const confirmDelete = confirm(`${peer.username} adlı arkadaşınızı silmek istediğinize emin misiniz?`);
@@ -719,13 +767,53 @@
     </header>
 
     <!-- Friend Management Action Row -->
-    <div style="display: flex; gap: 8px; padding: 4px 16px 12px; align-items: center; justify-content: space-between;">
-      <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Bağlantılarım</span>
-      <button on:click={() => showAddFriendModal = true} class="glowing" style="background: var(--accent); color: white; border: none; padding: 6px 12px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 15px var(--accent-glow); transition: all 0.25s;">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width: 13px; height: 13px;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
-        Arkadaş Ekle
+    <div style="display: flex; gap: 8px; padding: 4px 16px 12px; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-light); flex-wrap: wrap;">
+      <div style="display: flex; gap: 4px; background: rgba(255,255,255,0.03); padding: 2px; border-radius: 8px;">
+        <button on:click={() => { viewMode = 'chat'; }} class="tab-btn {viewMode === 'chat' ? 'active' : ''}" style="border: none; background: {viewMode === 'chat' ? 'var(--accent)' : 'transparent'}; color: {viewMode === 'chat' ? 'white' : 'var(--text-secondary)'}; font-size: 0.72rem; font-weight: 700; padding: 6px 10px; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.5px;">
+          {t.myConnections}
+        </button>
+        <button on:click={() => { viewMode = 'transfers'; }} class="tab-btn {viewMode === 'transfers' ? 'active' : ''}" style="border: none; background: {viewMode === 'transfers' ? 'var(--accent)' : 'transparent'}; color: {viewMode === 'transfers' ? 'white' : 'var(--text-secondary)'}; font-size: 0.72rem; font-weight: 700; padding: 6px 10px; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.5px;">
+          {t.sentItems}
+        </button>
+      </div>
+      
+      <button on:click={() => showAddFriendModal = true} class="glowing" style="background: var(--accent); color: white; border: none; padding: 6px 10px; border-radius: 8px; font-size: 0.72rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px; box-shadow: 0 4px 15px var(--accent-glow); transition: all 0.25s;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width: 12px; height: 12px;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+        {t.addFriend}
       </button>
     </div>
+
+    <!-- Friend Requests -->
+    {#if friendRequests.length > 0}
+      <div class="friend-requests-section animate-slide" style="padding: 10px 16px; border-bottom: 1px solid var(--border-light); background: rgba(0, 168, 132, 0.04);">
+        <span style="font-size: 0.72rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 8px;">
+          {t.friendRequests} ({friendRequests.length})
+        </span>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          {#each friendRequests as req}
+            <div class="glass-panel" style="padding: 10px; border-radius: 8px; border: 1px solid rgba(0,168,132,0.15); display: flex; flex-direction: column; gap: 6px; background: rgba(20,20,20,0.4);">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div class="avatar initials" style="width: 28px; height: 28px; font-size: 0.8rem; background: var(--accent); display: flex; align-items: center; justify-content: center; border-radius: 50%; color: white; font-weight: 700;">
+                  {req.username ? req.username[0].toUpperCase() : '?'}
+                </div>
+                <div style="display: flex; flex-direction: column; min-width: 0; flex: 1;">
+                  <span style="font-size: 0.82rem; font-weight: 600; color: white; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{req.username}</span>
+                  <span style="font-size: 0.6rem; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{req.peer_id}</span>
+                </div>
+              </div>
+              <div style="display: flex; gap: 6px;">
+                <button on:click={() => acceptFriendRequest(req)} class="bubble-btn accept-btn glowing" style="flex: 1; padding: 4px 8px; font-size: 0.7rem; font-weight: 700; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer;">
+                  {t.acceptBtnShort}
+                </button>
+                <button on:click={() => rejectFriendRequest(req)} class="bubble-btn decline-btn" style="flex: 1; padding: 4px 8px; font-size: 0.7rem; font-weight: 700; background: rgba(255,255,255,0.05); border: 1px solid var(--border-light); color: var(--text-secondary); border-radius: 4px; cursor: pointer;">
+                  {t.rejectBtnShort}
+                </button>
+              </div>
+            </div>
+          {/each}
+        </div>
+      </div>
+    {/if}
 
     <!-- Search / Filter -->
     <div class="search-container">
@@ -749,7 +837,7 @@
         </div>
       {:else}
         {#each filteredPeers as peer}
-          <button class="contact-card {selectedPeer && selectedPeer.username === peer.username ? 'active' : ''}" on:click={() => selectedPeer = peer}>
+          <button class="contact-card {viewMode === 'chat' && selectedPeer && selectedPeer.username === peer.username ? 'active' : ''}" on:click={() => { selectedPeer = peer; viewMode = 'chat'; }}>
             <div class="avatar initials" style="background: {peer.color || 'linear-gradient(135deg, #005c4b, #202c33)'}; transition: background 0.3s; position: relative;">
               {peer.username[0].toUpperCase()}
               <span class="active-dot" style="position: absolute; bottom: 0; right: 0; width: 8px; height: 8px; border-radius: 50%; background-color: {peer.color || 'var(--accent)'}; border: 1.5px solid var(--bg-secondary);"></span>
@@ -783,7 +871,94 @@
 
   <!-- RIGHT WINDOW (SPLASH OR ACTIVE CHAT) -->
   <main class="chat-area">
-    {#if !selectedPeer}
+    {#if viewMode === 'transfers'}
+      <!-- Transfers Dashboard -->
+      <div class="transfers-dashboard" style="display: flex; flex-direction: column; height: 100%; background: var(--bg-primary);">
+        <header style="padding: 20px 24px; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center; background: var(--bg-secondary); box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
+          <div>
+            <h1 style="font-size: 1.2rem; font-weight: 700; color: white; margin: 0; font-family: var(--font-main);">{t.allTransfersDashboard}</h1>
+            <p style="font-size: 0.78rem; color: var(--text-secondary); margin: 3px 0 0 0; font-family: var(--font-main);">{t.transferHistorySub}</p>
+          </div>
+          {#if transfers.length > 0}
+            <button on:click={handleClearHistory} class="bubble-btn animate-fade" style="background: rgba(234, 67, 53, 0.08); border-color: rgba(234, 67, 53, 0.15); color: #ff8f8f; padding: 6px 12px; font-weight: 600; display: flex; align-items: center; gap: 5px;" title={t.clearHistory}>
+              {t.clearHistoryBtn}
+            </button>
+          {/if}
+        </header>
+
+        <div style="flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 12px;">
+          {#if transfers.length === 0}
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-secondary); text-align: center; gap: 12px; opacity: 0.55;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 48px; height: 48px; color: var(--accent);"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <div>
+                <p style="font-size: 0.92rem; font-weight: 600; margin: 0;">{t.noTransfersYet}</p>
+              </div>
+            </div>
+          {:else}
+            {#each transfers as tr}
+              <div class="glass-panel animate-slide" style="padding: 14px 18px; border-radius: 12px; border: 1px solid var(--border-light); background: rgba(255,255,255,0.02); display: flex; flex-direction: column; gap: 10px; transition: all 0.25s;">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px;">
+                  <div style="display: flex; align-items: center; gap: 12px; overflow: hidden; flex: 1;">
+                    <div style="width: 36px; height: 36px; border-radius: 8px; background: {tr.is_sender ? 'rgba(66, 133, 244, 0.08)' : 'rgba(0, 168, 132, 0.08)'}; color: {tr.is_sender ? '#4285f4' : 'var(--accent)'}; display: flex; align-items: center; justify-content: center; font-size: 1.05rem; flex-shrink: 0; border: 1px solid {tr.is_sender ? 'rgba(66, 133, 244, 0.15)' : 'rgba(0, 168, 132, 0.15)'};">
+                      {#if tr.is_sender}
+                        📤
+                      {:else}
+                        📥
+                      {/if}
+                    </div>
+                    <div style="display: flex; flex-direction: column; overflow: hidden; text-align: left;">
+                      <span style="font-size: 0.88rem; font-weight: 600; color: white; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title={tr.filename}>{tr.filename}</span>
+                      <span style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 2px;">
+                        {formatBytes(tr.filesize)} • {tr.is_sender ? 'Alıcı' : 'Gönderen'}: <strong style="color: white; font-weight: 600;">{tr.peer_name}</strong>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+                    {#if tr.status !== 'transferring' && tr.status !== 'paused'}
+                      <span style="font-size: 0.65rem; font-weight: 700; padding: 4px 8px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+                        background: {tr.status === 'completed' ? 'rgba(0, 168, 132, 0.08)' : tr.status === 'declined' ? 'rgba(234, 67, 53, 0.08)' : 'rgba(255, 255, 255, 0.04)'};
+                        color: {tr.status === 'completed' ? 'var(--accent)' : tr.status === 'declined' || tr.status === 'failed' ? '#ff8f8f' : 'var(--text-secondary)'};
+                        border: 1px solid {tr.status === 'completed' ? 'rgba(0, 168, 132, 0.15)' : tr.status === 'declined' || tr.status === 'failed' ? 'rgba(234, 67, 53, 0.15)' : 'rgba(255, 255, 255, 0.08)'};">
+                        {tr.status === 'completed' ? t.statusCompleted : tr.status === 'declined' ? t.statusDeclined : tr.status === 'failed' ? t.statusFailed : tr.status}
+                      </span>
+                    {/if}
+                  </div>
+                </div>
+
+                {#if tr.status === 'transferring' || tr.status === 'paused'}
+                  <div class="progress-container" style="margin: 0; padding: 0; background: transparent; border: none; width: 100%;">
+                    <div class="progress-header" style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 5px;">
+                      <span>{tr.status === 'paused' ? t.statusPaused : t.statusTransferring} %{tr.percent}</span>
+                      <span>{tr.status === 'paused' ? '0.0' : tr.speed_mb.toFixed(1)} MB/s</span>
+                    </div>
+                    <div class="progress-bar-bg" style="height: 5px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; width: 100%;">
+                      <div class="progress-bar-fill" style="width: {tr.percent}%; height: 100%; background-color: {tr.status === 'paused' ? '#fbbc05' : 'var(--accent)'}; box-shadow: 0 0 8px {tr.status === 'paused' ? '#fbbc05' : 'var(--accent-glow)'}; transition: width 0.1s ease;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; margin-top: 6px;">
+                      <button on:click={() => togglePauseResume(tr)} class="bubble-btn" style="background-color: rgba(255,255,255,0.04); font-size: 0.68rem; border-color: rgba(255,255,255,0.08); padding: 3px 8px; border-radius: 4px;">
+                        {tr.status === 'paused' ? t.actionResume : t.actionPause}
+                      </button>
+                    </div>
+                  </div>
+                {:else if tr.status === 'completed'}
+                  {#if !tr.is_sender && tr.local_path}
+                    <div style="display: flex; gap: 6px; justify-content: flex-end; width: 100%;">
+                      <button on:click={() => openFile(tr.local_path)} class="bubble-btn open-file-btn" style="padding: 4px 10px; font-size: 0.7rem; border-radius: 4px;">
+                        {t.actionOpen}
+                      </button>
+                      <button on:click={() => openFolder(tr.local_path)} class="bubble-btn folder-btn" title={t.actionShow} style="padding: 4px 10px; font-size: 0.7rem; border-radius: 4px;">
+                        {t.actionShow}
+                      </button>
+                    </div>
+                  {/if}
+                {/if}
+              </div>
+            {/each}
+          {/if}
+        </div>
+      </div>
+    {:else if !selectedPeer}
       <!-- Splash Screen -->
       <div class="splash-screen" style="display: flex; justify-content: center; align-items: center; height: 100%; background: radial-gradient(circle at center, rgba(0,168,132,0.03) 0%, rgba(11,20,26,0) 70%);">
         <div class="splash-content glass-panel animate-fade" style="width: 100%; max-width: 520px; padding: 40px; text-align: center; display: flex; flex-direction: column; align-items: center; border: 1px solid rgba(255,255,255,0.06); background: rgba(17, 27, 33, 0.4); box-shadow: 0 20px 50px rgba(0,0,0,0.5); backdrop-filter: blur(20px);">
@@ -859,9 +1034,9 @@
             </div>
           </div>
           <div style="display: flex; gap: 10px; align-items: center;">
-            <button on:click={() => handleRemoveFriend(selectedPeer)} class="bubble-btn animate-fade" style="background-color: rgba(234, 67, 53, 0.08); border-color: rgba(234, 67, 53, 0.15); color: #ff8f8f; padding: 6px 12px; display: flex; align-items: center; gap: 5px;" title="Arkadaşı Listemden Sil">
+            <button on:click={() => handleRemoveFriend(selectedPeer)} class="bubble-btn animate-fade" style="background-color: rgba(234, 67, 53, 0.08); border-color: rgba(234, 67, 53, 0.15); color: #ff8f8f; padding: 6px 12px; display: flex; align-items: center; gap: 5px;" title={t.deleteFriendTitle}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 12px; height: 12px;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
-              Arkadaşı Sil
+              {t.deleteFriend}
             </button>
             <button on:click={handleClearHistory} class="bubble-btn animate-fade" style="background-color: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.1); color: var(--text-secondary); padding: 6px 12px; display: flex; align-items: center; gap: 5px;" title={t.clearHistory}>
               {t.clearHistoryBtn}

@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	ChunkSize       = 64 * 1024 // 64 KB chunks
+	ChunkSize       = 1024 * 1024 // 1 MB chunks for high-speed transfers
 	TransferTimeout = 60 * time.Second
 )
 
