@@ -316,6 +316,12 @@
       }
     });
 
+    EventsOn("startup_file_received", (path) => {
+      if (path) {
+        startupFilePath = path;
+      }
+    });
+
     // Live active peers from discovery
     EventsOn("peers_updated", (peerList) => {
       peers = peerList || [];
@@ -1074,10 +1080,10 @@
  
     <div class="modal-footer">
       <button class="modal-btn decline-btn" on:click={() => respondToTransfer(false)}>
-        {t.btnDecline}
+        {t.declineBtn}
       </button>
       <button class="modal-btn accept-btn glowing" on:click={() => respondToTransfer(true)}>
-        {t.btnAccept}
+        {t.acceptBtn}
       </button>
     </div>
   </div>

@@ -38,6 +38,8 @@ export function GetTransfers():Promise<Array<main.TransferState>>;
 
 export function GetUsername():Promise<string>;
 
+export function HandleStartupFilePath(arg1:string):Promise<void>;
+
 export function LoginProfile(arg1:string):Promise<void>;
 
 export function Logout():Promise<void>;

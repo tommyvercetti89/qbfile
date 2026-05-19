@@ -64,7 +64,9 @@ type Profile struct {
 	Color             string   `json:"color"`              // Custom profile avatar color
 	Status            string   `json:"status"`             // Custom profile status message
 	MatchmakingServer string   `json:"matchmaking_server"` // Custom matchmaking server address configured by user
-	Friends           []string `json:"friends"`            // Persistent list of added friends (Peer IDs or public key strings)
+	Friends           []string          `json:"friends"`            // Persistent list of added friends (Peer IDs or public key strings)
+	FriendNames       map[string]string `json:"friend_names"`       // Map of PeerID -> Last known username
+	FriendColors      map[string]string `json:"friend_colors"`      // Map of PeerID -> Last known color
 }
 
 // GeneratePeerID generates a mathematically guaranteed globally unique 128-bit Peer ID
@@ -165,7 +167,9 @@ func CreateProfile(username string, password string) (*Profile, []byte, error) {
 		PublicKey:  pubKey.Bytes(),
 		Color:      "#00a884",
 		Status:     "Dosya almaya hazır",
-		Friends:    []string{},
+		Friends:           []string{},
+		FriendNames:       make(map[string]string),
+		FriendColors:      make(map[string]string),
 	}
 
 	profileJSON, err := json.Marshal(profile)
@@ -237,6 +241,12 @@ func UnlockProfile(password string) (*Profile, []byte, error) {
 	if profile.Friends == nil {
 		profile.Friends = []string{}
 	}
+	if profile.FriendNames == nil {
+		profile.FriendNames = make(map[string]string)
+	}
+	if profile.FriendColors == nil {
+		profile.FriendColors = make(map[string]string)
+	}
 	// Auto repair Peer IDs containing formatting leftovers
 	if profile.PeerID == "" || strings.Contains(profile.PeerID, "%!X") || strings.Contains(profile.PeerID, "MISSING") {
 		pID, errGen := GeneratePeerID()
@@ -298,7 +308,9 @@ func CreateProfileAuto(username string) (*Profile, []byte, error) {
 		PublicKey:  pubKey.Bytes(),
 		Color:      "#00a884",
 		Status:     "Dosya almaya hazır",
-		Friends:    []string{},
+		Friends:           []string{},
+		FriendNames:       make(map[string]string),
+		FriendColors:      make(map[string]string),
 	}
 
 	profileJSON, err := json.Marshal(profile)
@@ -372,6 +384,12 @@ func UnlockProfileAuto() (*Profile, []byte, error) {
 	}
 	if profile.Friends == nil {
 		profile.Friends = []string{}
+	}
+	if profile.FriendNames == nil {
+		profile.FriendNames = make(map[string]string)
+	}
+	if profile.FriendColors == nil {
+		profile.FriendColors = make(map[string]string)
 	}
 
 	return &profile, key, nil

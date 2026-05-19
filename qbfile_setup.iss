@@ -37,8 +37,8 @@ ArchitecturesInstallIn64BitMode=x64
 PrivilegesRequired=admin
 
 [Languages]
-Name: "turkish"; MessagesFile: "compiler:Default.isl"
-Name: "english"; MessagesFile: "compiler:Languages\English.isl"
+Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked

@@ -913,7 +913,9 @@ func (t *TransferManager) UpdateExternalProgress(id string, bytes int64, speed f
 		}
 		tr.SpeedMB = speed
 		tr.Percent = percent
-		tr.Status = status
+		if tr.Status != "paused" {
+			tr.Status = status
+		}
 	}
 	t.mu.Unlock()
 	t.emitTransfers()

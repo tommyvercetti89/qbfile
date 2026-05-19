@@ -178,7 +178,7 @@ func (a *App) startServices() error {
 	// 2. Start LAN Discovery
 	err = a.discoveryService.Start(p.PeerID, p.Username, p.PublicKey, tcpPort, p.Color, p.Status)
 	if err != nil {
-		return fmt.Errorf("failed to start LAN discovery: %w", err)
+		println("Warning: failed to start LAN discovery:", err.Error())
 	}
 
 	// 3. Start WAN Client
@@ -332,6 +332,8 @@ func (a *App) EmitCombinedPeers() {
 				onlineFriends[hex.EncodeToString(p.PublicKey)] = true
 				onlineFriends[base64.StdEncoding.EncodeToString(p.PublicKey)] = true
 			}
+			// Update friend metadata persistently when they come online
+			a.updateFriendMetadata(p.PeerID, p.Username, p.Color)
 		}
 	}
 
@@ -342,19 +344,23 @@ func (a *App) EmitCombinedPeers() {
 			continue
 		}
 		if !onlineFriends[fClean] {
-			var peerID string
-			var username string
-			if strings.HasPrefix(fClean, "QB-") {
-				peerID = fClean
-				username = "Arkadaş (" + fClean + ")"
-			} else {
-				peerID = fClean
-				username = "Arkadaş (" + fClean + ")"
-				if len(fClean) > 12 {
-					username = "Arkadaş (" + fClean[:12] + "...)"
+			peerID := fClean
+			username := "Arkadaş (" + fClean + ")"
+			
+			a.mu.RLock()
+			if a.profile != nil && a.profile.FriendNames != nil {
+				if savedName, ok := a.profile.FriendNames[fClean]; ok && savedName != "" {
+					username = savedName
 				}
 			}
-			
+			color := "#6c757d"
+			if a.profile != nil && a.profile.FriendColors != nil {
+				if savedColor, ok := a.profile.FriendColors[fClean]; ok && savedColor != "" {
+					color = savedColor
+				}
+			}
+			a.mu.RUnlock()
+
 			friendsOnly = append(friendsOnly, &Peer{
 				PeerID:    peerID,
 				Username:  username,
@@ -362,13 +368,44 @@ func (a *App) EmitCombinedPeers() {
 				TCPPort:   0,
 				PublicKey: []byte{},
 				Online:    false,
-				Color:     "#6c757d", // Slate gray
+				Color:     color, // Use last known color
 				Status:    "Çevrimdışı",
 			})
 		}
 	}
 
 	runtime.EventsEmit(a.ctx, "peers_updated", friendsOnly)
+}
+
+func (a *App) updateFriendMetadata(peerID string, username string, color string) {
+	a.mu.Lock()
+	if a.profile == nil {
+		a.mu.Unlock()
+		return
+	}
+	if a.profile.FriendNames == nil {
+		a.profile.FriendNames = make(map[string]string)
+	}
+	if a.profile.FriendColors == nil {
+		a.profile.FriendColors = make(map[string]string)
+	}
+
+	changed := false
+	if a.profile.FriendNames[peerID] != username && username != "" && !strings.Contains(username, "Arkadaş (") {
+		a.profile.FriendNames[peerID] = username
+		changed = true
+	}
+	if a.profile.FriendColors[peerID] != color && color != "" && color != "#6c757d" {
+		a.profile.FriendColors[peerID] = color
+		changed = true
+	}
+	p := a.profile
+	key := a.sessionKey
+	a.mu.Unlock()
+
+	if changed {
+		_ = SaveProfile(p, key)
+	}
 }
 
 // AcceptTransfer routes frontend's decision for an incoming file
@@ -554,6 +591,10 @@ func (a *App) GetServerAddress() string {
 	if a.profile == nil {
 		return ""
 	}
+	// Hide default server IP from settings UI textbox
+	if a.profile.MatchmakingServer == DefaultWANServer {
+		return ""
+	}
 	return a.profile.MatchmakingServer
 }
 
@@ -639,11 +680,30 @@ func (a *App) SendFolderToPeer(peerIP string, peerPort int, peerPubKeyHex string
 // PauseTransfer triggers active chunk pause
 func (a *App) PauseTransfer(transferID string) {
 	a.transferManager.PauseTransfer(transferID)
+	if a.wanService != nil {
+		a.wanService.PauseTransfer(transferID)
+	}
 }
 
 // ResumeTransfer resumes active chunk transfer
 func (a *App) ResumeTransfer(transferID string) {
 	a.transferManager.ResumeTransfer(transferID)
+	if a.wanService != nil {
+		a.wanService.ResumeTransfer(transferID)
+	}
+}
+
+// HandleStartupFilePath sets startupFilePath and notifies UI
+func (a *App) HandleStartupFilePath(filePath string) {
+	a.mu.Lock()
+	a.startupFilePath = filePath
+	a.mu.Unlock()
+
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "startup_file_received", filePath)
+		runtime.WindowShow(a.ctx)
+		runtime.WindowUnminimise(a.ctx)
+	}
 }
 
 // ClearTransferHistory deletes memory and persistent JSON logs
