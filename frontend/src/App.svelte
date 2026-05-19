@@ -27,6 +27,7 @@
     ClearStartupFilePath,
     PauseTransfer,
     ResumeTransfer,
+    CancelTransfer,
     ClearTransferHistory,
     GetServerAddress,
     UpdateServerAddress,
@@ -160,9 +161,10 @@
       friendRequests: "Gelen Arkadaşlık İstekleri",
       acceptBtnShort: "Kabul Et",
       rejectBtnShort: "Reddet",
-      noTransfersYet: "Henüz transfer bulunmuyor.",
-      allTransfersDashboard: "Tüm Transferler Paneli",
-      transferHistorySub: "Gönderdiğiniz ve aldığınız dosyaların geçmişi"
+      noTransfersYet: "Henüz bu kişiyle transfer bulunmuyor.",
+      allTransfersDashboard: "Transfer Geçmişi",
+      transferHistorySub: "Bu arkadaşla gönderilen ve alınan dosyalar",
+      actionCancel: "❌ İptal Et"
     },
     en: {
       settingsTitle: "Application Settings",
@@ -238,9 +240,10 @@
       friendRequests: "Incoming Friend Requests",
       acceptBtnShort: "Accept",
       rejectBtnShort: "Decline",
-      noTransfersYet: "No transfers yet.",
-      allTransfersDashboard: "All Transfers Dashboard",
-      transferHistorySub: "History of files sent and received"
+      noTransfersYet: "No transfers with this contact yet.",
+      allTransfersDashboard: "Transfer History",
+      transferHistorySub: "Files exchanged with this friend",
+      actionCancel: "❌ Cancel"
     }
   };
 
@@ -517,6 +520,10 @@
     } else if (transfer.status === 'paused') {
       ResumeTransfer(transfer.id);
     }
+  }
+
+  function cancelTransfer(transfer) {
+    CancelTransfer(transfer.id);
   }
 
   function handleClearHistory() {
@@ -874,11 +881,13 @@
   <!-- RIGHT WINDOW (SPLASH OR ACTIVE CHAT) -->
   <main class="chat-area">
     {#if viewMode === 'transfers'}
-      <!-- Transfers Dashboard -->
+      <!-- Transfers Dashboard (filtered to selected peer) -->
       <div class="transfers-dashboard" style="display: flex; flex-direction: column; height: 100%; background: var(--bg-primary);">
         <header style="padding: 20px 24px; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center; background: var(--bg-secondary); box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
           <div>
-            <h1 style="font-size: 1.2rem; font-weight: 700; color: white; margin: 0; font-family: var(--font-main);">{t.allTransfersDashboard}</h1>
+            <h1 style="font-size: 1.2rem; font-weight: 700; color: white; margin: 0; font-family: var(--font-main);">
+              {selectedPeer ? selectedPeer.username : t.allTransfersDashboard}
+            </h1>
             <p style="font-size: 0.78rem; color: var(--text-secondary); margin: 3px 0 0 0; font-family: var(--font-main);">{t.transferHistorySub}</p>
           </div>
           {#if transfers.length > 0}
@@ -889,15 +898,13 @@
         </header>
 
         <div style="flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 12px;">
-          {#if transfers.length === 0}
+          {#if !selectedPeer}
             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-secondary); text-align: center; gap: 12px; opacity: 0.55;">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 48px; height: 48px; color: var(--accent);"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-              <div>
-                <p style="font-size: 0.92rem; font-weight: 600; margin: 0;">{t.noTransfersYet}</p>
-              </div>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 48px; height: 48px; color: var(--accent);"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <p style="font-size: 0.92rem; font-weight: 600; margin: 0;">{currentLang === 'tr' ? 'Geçmişi görmek için sol panelden bir arkadaş seçin.' : 'Select a friend from the left to view history.'}</p>
             </div>
           {:else}
-            {#each transfers as tr}
+            {#each filteredTransfers.filter(tr => !tr.filename.startsWith('[TextBase64]')) as tr}
               <div class="glass-panel animate-slide" style="padding: 14px 18px; border-radius: 12px; border: 1px solid var(--border-light); background: rgba(255,255,255,0.02); display: flex; flex-direction: column; gap: 10px; transition: all 0.25s;">
                 <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px;">
                   <div style="display: flex; align-items: center; gap: 12px; overflow: hidden; flex: 1;">
@@ -911,7 +918,7 @@
                     <div style="display: flex; flex-direction: column; overflow: hidden; text-align: left;">
                       <span style="font-size: 0.88rem; font-weight: 600; color: white; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title={tr.filename}>{tr.filename}</span>
                       <span style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 2px;">
-                        {formatBytes(tr.filesize)} • {tr.is_sender ? 'Alıcı' : 'Gönderen'}: <strong style="color: white; font-weight: 600;">{tr.peer_name}</strong>
+                        {formatBytes(tr.filesize)} • {tr.is_sender ? (currentLang === 'tr' ? 'Alıcı' : 'Recipient') : (currentLang === 'tr' ? 'Gönderen' : 'Sender')}: <strong style="color: white; font-weight: 600;">{tr.peer_name}</strong>
                       </span>
                     </div>
                   </div>
@@ -937,10 +944,19 @@
                     <div class="progress-bar-bg" style="height: 5px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; width: 100%;">
                       <div class="progress-bar-fill" style="width: {tr.percent}%; height: 100%; background-color: {tr.status === 'paused' ? '#fbbc05' : 'var(--accent)'}; box-shadow: 0 0 8px {tr.status === 'paused' ? '#fbbc05' : 'var(--accent-glow)'}; transition: width 0.1s ease;"></div>
                     </div>
-                    <div style="display: flex; justify-content: flex-end; margin-top: 6px;">
-                      <button on:click={() => togglePauseResume(tr)} class="bubble-btn" style="background-color: rgba(255,255,255,0.04); font-size: 0.68rem; border-color: rgba(255,255,255,0.08); padding: 3px 8px; border-radius: 4px;">
-                        {tr.status === 'paused' ? t.actionResume : t.actionPause}
-                      </button>
+                    <div style="display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px;">
+                      {#if tr.is_sender}
+                        <button on:click={() => togglePauseResume(tr)} class="bubble-btn" style="background-color: rgba(255,255,255,0.04); font-size: 0.68rem; border-color: rgba(255,255,255,0.08); padding: 3px 8px; border-radius: 4px;">
+                          {tr.status === 'paused' ? t.actionResume : t.actionPause}
+                        </button>
+                      {:else}
+                        <button on:click={() => togglePauseResume(tr)} class="bubble-btn" style="background-color: rgba(255,255,255,0.04); font-size: 0.68rem; border-color: rgba(255,255,255,0.08); padding: 3px 8px; border-radius: 4px;">
+                          {tr.status === 'paused' ? t.actionResume : t.actionPause}
+                        </button>
+                        <button on:click={() => cancelTransfer(tr)} class="bubble-btn" style="background-color: rgba(234,67,53,0.08); font-size: 0.68rem; border-color: rgba(234,67,53,0.2); color: #ff8f8f; padding: 3px 8px; border-radius: 4px;">
+                          {t.actionCancel}
+                        </button>
+                      {/if}
                     </div>
                   </div>
                 {:else if tr.status === 'completed'}
@@ -955,6 +971,11 @@
                     </div>
                   {/if}
                 {/if}
+              </div>
+            {:else}
+              <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-secondary); text-align: center; gap: 12px; opacity: 0.55;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 48px; height: 48px; color: var(--accent);"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <p style="font-size: 0.92rem; font-weight: 600; margin: 0;">{t.noTransfersYet}</p>
               </div>
             {/each}
           {/if}
@@ -1133,10 +1154,15 @@
                         <div class="progress-bar-bg">
                           <div class="progress-bar-fill" style="width: {tr.percent}%; background-color: {tr.status === 'paused' ? '#fbbc05' : 'var(--accent)'}; box-shadow: 0 0 8px {tr.status === 'paused' ? '#fbbc05' : 'var(--accent-glow)'};"></div>
                         </div>
-                        <div style="display: flex; justify-content: flex-end; margin-top: 8px;">
+                        <div style="display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px;">
                           <button on:click={() => togglePauseResume(tr)} class="bubble-btn" style="background-color: rgba(255,255,255,0.06); font-size: 0.7rem; border-color: rgba(255,255,255,0.1);">
                             {tr.status === 'paused' ? t.actionResume : t.actionPause}
                           </button>
+                          {#if !tr.is_sender}
+                            <button on:click={() => cancelTransfer(tr)} class="bubble-btn" style="background-color: rgba(234,67,53,0.08); font-size: 0.7rem; border-color: rgba(234,67,53,0.2); color: #ff8f8f;">
+                              {t.actionCancel}
+                            </button>
+                          {/if}
                         </div>
                       </div>
                     {:else if tr.status === 'pending'}

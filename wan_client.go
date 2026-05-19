@@ -810,6 +810,25 @@ func (w *WANService) ResumeTransfer(transferID string) {
 	w.mu.Unlock()
 }
 
+// CancelTransfer cancels an active WAN transfer and notifies the sender
+func (w *WANService) CancelTransfer(transferID string) {
+	w.mu.Lock()
+	tr, exists := w.activeTransfers[transferID]
+	if exists && (tr.Status == "transferring" || tr.Status == "paused" || tr.Status == "pending") {
+		tr.Status = "failed"
+		peerID := tr.PeerName
+		w.mu.Unlock()
+
+		w.sendSignal(peerID, &WANSignalPayload{
+			Type:       "cancel",
+			TransferID: transferID,
+		})
+		w.app.transferManager.UpdateExternalStatus(transferID, "failed", nil)
+		return
+	}
+	w.mu.Unlock()
+}
+
 // SendFriendRequest sends a friend request signal to another peer via WAN
 func (w *WANService) SendFriendRequest(targetPeerID string) {
 	w.mu.RLock()

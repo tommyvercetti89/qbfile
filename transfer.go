@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	ChunkSize       = 1024 * 1024 // 1 MB chunks for high-speed transfers
+	ChunkSize       = 256 * 1024 // 256 KB chunks for high-speed transfers
 	TransferTimeout = 60 * time.Second
 )
 
@@ -207,8 +207,6 @@ func (t *TransferManager) sendFileRoutine(transferID, peerIP string, peerPort in
 	defer conn.Close()
 
 	if tcpConn, ok := conn.(*net.TCPConn); ok {
-		_ = tcpConn.SetWriteBuffer(4 * 1024 * 1024)
-		_ = tcpConn.SetReadBuffer(4 * 1024 * 1024)
 		_ = tcpConn.SetNoDelay(true)
 	}
 
@@ -221,7 +219,7 @@ func (t *TransferManager) sendFileRoutine(transferID, peerIP string, peerPort in
 		t.mu.Unlock()
 	}()
 
-	// Start a background loop to listen for pause/resume signals from the receiver
+	// Start a background loop to listen for pause/resume/cancel signals from the receiver
 	go func() {
 		buf := make([]byte, 16)
 		for {
@@ -244,6 +242,15 @@ func (t *TransferManager) sendFileRoutine(transferID, peerIP string, peerPort in
 				}
 				t.mu.Unlock()
 				t.emitTransfers()
+			} else if cmd == "cancel" {
+				t.mu.Lock()
+				if tr, exists := t.activeTransfers[transferID]; exists {
+					tr.Status = "failed"
+				}
+				t.mu.Unlock()
+				t.emitTransfers()
+				_ = conn.Close()
+				return
 			}
 		}
 	}()
@@ -369,17 +376,21 @@ func (t *TransferManager) sendFileRoutine(transferID, peerIP string, peerPort in
 	var lastReportBytes int64
 
 	for {
-		// Pause check loop
+		// Pause / cancel check loop
 		for {
 			t.mu.RLock()
 			tr, exists := t.activeTransfers[transferID]
-			var isPaused bool
+			var status string
 			if exists {
-				isPaused = tr.Status == "paused"
+				status = tr.Status
 			}
 			t.mu.RUnlock()
 
-			if !isPaused {
+			if status == "failed" {
+				// Cancelled — bail out
+				return
+			}
+			if status != "paused" {
 				break
 			}
 			// Reset last report times to avoid speed calculation spikes and timeouts
@@ -476,8 +487,6 @@ func (t *TransferManager) receiveTransferRoutine(conn net.Conn) {
 	defer conn.Close()
 
 	if tcpConn, ok := conn.(*net.TCPConn); ok {
-		_ = tcpConn.SetWriteBuffer(4 * 1024 * 1024)
-		_ = tcpConn.SetReadBuffer(4 * 1024 * 1024)
 		_ = tcpConn.SetNoDelay(true)
 	}
 
@@ -645,17 +654,25 @@ func (t *TransferManager) receiveTransferRoutine(conn net.Conn) {
 	var lastReportBytes int64
 
 	for {
-		// Pause check loop
+		// Pause / cancel check loop
 		for {
 			t.mu.RLock()
 			tr, exists := t.activeTransfers[transferID]
-			var isPaused bool
+			var status string
 			if exists {
-				isPaused = tr.Status == "paused"
+				status = tr.Status
 			}
 			t.mu.RUnlock()
 
-			if !isPaused {
+			if status == "failed" {
+				// Cancelled by receiver — clean up partial file
+				file.Close()
+				_ = os.Remove(transfer.LocalPath)
+				t.emitTransfers()
+				t.SaveTransfers()
+				return
+			}
+			if status != "paused" {
 				break
 			}
 			lastReportTime = time.Now()
@@ -850,6 +867,20 @@ func (t *TransferManager) LoadTransfers() {
 	t.mu.Unlock()
 }
 
+// UpdateExternalStatus updates a transfer's status from an external source (e.g. WAN service)
+func (t *TransferManager) UpdateExternalStatus(transferID string, status string, err error) {
+	t.mu.Lock()
+	if tr, exists := t.activeTransfers[transferID]; exists {
+		tr.Status = status
+		if err != nil {
+			tr.PeerName = err.Error()
+		}
+	}
+	t.mu.Unlock()
+	t.emitTransfers()
+	t.SaveTransfers()
+}
+
 // ClearTransferHistory clears the local history file and memory state
 func (t *TransferManager) ClearTransferHistory() {
 	t.mu.Lock()
@@ -886,6 +917,31 @@ func (t *TransferManager) ResumeTransfer(transferID string) {
 		}
 	}
 	t.mu.Unlock()
+	t.emitTransfers()
+	t.SaveTransfers()
+}
+
+// CancelTransfer cancels an active LAN transfer, sends cancel command to peer, and cleans up local files
+func (t *TransferManager) CancelTransfer(transferID string) {
+	t.mu.Lock()
+	tr, exists := t.activeTransfers[transferID]
+	if exists && (tr.Status == "transferring" || tr.Status == "paused" || tr.Status == "pending") {
+		tr.Status = "failed"
+		if conn, hasConn := t.activeConns[transferID]; hasConn {
+			go func() {
+				_, _ = conn.Write([]byte("cancel"))
+				_ = conn.Close()
+			}()
+		}
+		localPath := tr.LocalPath
+		t.mu.Unlock()
+
+		if localPath != "" {
+			_ = os.Remove(localPath)
+		}
+	} else {
+		t.mu.Unlock()
+	}
 	t.emitTransfers()
 	t.SaveTransfers()
 }
@@ -983,20 +1039,7 @@ func (t *TransferManager) UpdateExternalProgress(id string, bytes int64, speed f
 	t.emitTransfers()
 }
 
-// UpdateExternalStatus updates the final status of a transfer, setting the error peer name if failed
-func (t *TransferManager) UpdateExternalStatus(id string, status string, err error) {
-	t.mu.Lock()
-	tr, exists := t.activeTransfers[id]
-	if exists {
-		tr.Status = status
-		if err != nil {
-			tr.PeerName = fmt.Sprintf("Error: %s", err.Error())
-		}
-	}
-	t.mu.Unlock()
-	t.emitTransfers()
-	t.SaveTransfers()
-}
+
 
 // playNotificationSound triggers a sound event in the frontend context
 func (t *TransferManager) playNotificationSound(soundType string) {

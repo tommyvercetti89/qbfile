@@ -705,6 +705,14 @@ func (a *App) ResumeTransfer(transferID string) {
 	}
 }
 
+// CancelTransfer cancels active chunk transfer and cleans up files
+func (a *App) CancelTransfer(transferID string) {
+	a.transferManager.CancelTransfer(transferID)
+	if a.wanService != nil {
+		a.wanService.CancelTransfer(transferID)
+	}
+}
+
 // HandleStartupFilePath sets startupFilePath and notifies UI
 func (a *App) HandleStartupFilePath(filePath string) {
 	a.mu.Lock()
