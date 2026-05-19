@@ -152,6 +152,7 @@
       rightClickReady: "Sağ tık ile seçilen öge gönderilmeye hazır:",
       btnSendNow: "Şimdi Gönder",
       myConnections: "Bağlantılarım",
+      secureChannel: "Uçtan Uca Güvenli",
       deleteFriend: "Arkadaşı Sil",
       deleteFriendTitle: "Arkadaşı Listemden Sil",
       addFriend: "Arkadaş Ekle",
@@ -229,6 +230,7 @@
       rightClickReady: "Right-click selected item is ready to send:",
       btnSendNow: "Send Now",
       myConnections: "My Connections",
+      secureChannel: "End-to-End Secure",
       deleteFriend: "Delete Friend",
       deleteFriendTitle: "Remove Friend from My List",
       addFriend: "Add Friend",
@@ -856,7 +858,7 @@
                 <span class="contact-time" style="color: {peer.color || 'var(--accent)'}; font-weight: 600; font-size: 0.72rem; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{peer.status || (currentLang === 'tr' ? "Çevrimiçi" : "Online")}</span>
               </div>
               <div class="contact-row">
-                <span class="contact-ip">IP: {peer.ip}:{peer.tcp_port}</span>
+                <span class="contact-ip">{t.secureChannel}</span>
                 <span class="lock-icon" style="color: var(--accent); font-size: 0.7rem; font-weight: 600; display: flex; align-items: center; gap: 3px;">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width: 11px; height: 11px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                   E2EE
@@ -1026,7 +1028,7 @@
               <h2>{selectedPeer.username}</h2>
               <span class="peer-status">
                 {#if selectedPeer.online}
-                  <span class="active-dot" style="background-color: {selectedPeer.color || 'var(--accent)'}"></span> {selectedPeer.status || (currentLang === 'tr' ? "Çevrimiçi" : "Online")} ({selectedPeer.ip})
+                  <span class="active-dot" style="background-color: {selectedPeer.color || 'var(--accent)'}"></span> {selectedPeer.status || (currentLang === 'tr' ? "Çevrimiçi" : "Online")}
                 {:else}
                   <span class="offline-dot"></span> {t.offlineText}
                 {/if}
