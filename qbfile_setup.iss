@@ -35,6 +35,7 @@ ArchitecturesInstallIn64BitMode=x64
 
 ; Privileges (Requires Admin to modify Program Files and Registry HKCR keys)
 PrivilegesRequired=admin
+CloseApplications=yes
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

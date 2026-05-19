@@ -74,6 +74,7 @@ type TransferManager struct {
 	port             int
 	activeTransfers  map[string]*TransferState
 	pendingDecisions map[string]chan Decision
+	activeConns      map[string]net.Conn
 	profile          *Profile
 	stopChan         chan struct{}
 	tempFiles        sync.Map // Tracks temporary zip files to clean up
@@ -85,6 +86,7 @@ func NewTransferManager(app *App) *TransferManager {
 		app:              app,
 		activeTransfers:  make(map[string]*TransferState),
 		pendingDecisions: make(map[string]chan Decision),
+		activeConns:      make(map[string]net.Conn),
 		stopChan:         make(chan struct{}),
 	}
 	tm.LoadTransfers()
@@ -203,6 +205,48 @@ func (t *TransferManager) sendFileRoutine(transferID, peerIP string, peerPort in
 		return
 	}
 	defer conn.Close()
+
+	if tcpConn, ok := conn.(*net.TCPConn); ok {
+		_ = tcpConn.SetWriteBuffer(4 * 1024 * 1024)
+		_ = tcpConn.SetReadBuffer(4 * 1024 * 1024)
+		_ = tcpConn.SetNoDelay(true)
+	}
+
+	t.mu.Lock()
+	t.activeConns[transferID] = conn
+	t.mu.Unlock()
+	defer func() {
+		t.mu.Lock()
+		delete(t.activeConns, transferID)
+		t.mu.Unlock()
+	}()
+
+	// Start a background loop to listen for pause/resume signals from the receiver
+	go func() {
+		buf := make([]byte, 16)
+		for {
+			n, err := conn.Read(buf)
+			if err != nil {
+				return
+			}
+			cmd := string(buf[:n])
+			if cmd == "pause" {
+				t.mu.Lock()
+				if tr, exists := t.activeTransfers[transferID]; exists {
+					tr.Status = "paused"
+				}
+				t.mu.Unlock()
+				t.emitTransfers()
+			} else if cmd == "resume" {
+				t.mu.Lock()
+				if tr, exists := t.activeTransfers[transferID]; exists {
+					tr.Status = "transferring"
+				}
+				t.mu.Unlock()
+				t.emitTransfers()
+			}
+		}
+	}()
 
 	// 1. Perform ECDH Shared Secret Agreement
 	localPriv, err := ecdh.P256().NewPrivateKey(t.profile.PrivateKey)
@@ -431,6 +475,12 @@ func (t *TransferManager) listenLoop() {
 func (t *TransferManager) receiveTransferRoutine(conn net.Conn) {
 	defer conn.Close()
 
+	if tcpConn, ok := conn.(*net.TCPConn); ok {
+		_ = tcpConn.SetWriteBuffer(4 * 1024 * 1024)
+		_ = tcpConn.SetReadBuffer(4 * 1024 * 1024)
+		_ = tcpConn.SetNoDelay(true)
+	}
+
 	// 1. Read handshake size (4 bytes)
 	sizeBuf := make([]byte, 4)
 	if _, err := io.ReadFull(conn, sizeBuf); err != nil {
@@ -567,7 +617,13 @@ func (t *TransferManager) receiveTransferRoutine(conn net.Conn) {
 	t.mu.Lock()
 	transfer.LocalPath = savePath
 	transfer.Status = "transferring"
+	t.activeConns[transferID] = conn
 	t.mu.Unlock()
+	defer func() {
+		t.mu.Lock()
+		delete(t.activeConns, transferID)
+		t.mu.Unlock()
+	}()
 	t.emitTransfers()
 	t.SaveTransfers()
 
@@ -810,6 +866,9 @@ func (t *TransferManager) PauseTransfer(transferID string) {
 	tr, exists := t.activeTransfers[transferID]
 	if exists && tr.Status == "transferring" {
 		tr.Status = "paused"
+		if conn, hasConn := t.activeConns[transferID]; hasConn {
+			go conn.Write([]byte("pause"))
+		}
 	}
 	t.mu.Unlock()
 	t.emitTransfers()
@@ -822,6 +881,9 @@ func (t *TransferManager) ResumeTransfer(transferID string) {
 	tr, exists := t.activeTransfers[transferID]
 	if exists && tr.Status == "paused" {
 		tr.Status = "transferring"
+		if conn, hasConn := t.activeConns[transferID]; hasConn {
+			go conn.Write([]byte("resume"))
+		}
 	}
 	t.mu.Unlock()
 	t.emitTransfers()

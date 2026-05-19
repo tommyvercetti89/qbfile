@@ -411,7 +411,7 @@ func (w *WANService) handleSignal(senderID string, sig *WANSignalPayload) {
 			tr.Status = "paused"
 		}
 		w.mu.Unlock()
-		w.app.transferManager.emitTransfers()
+		w.app.transferManager.UpdateExternalStatus(sig.TransferID, "paused", nil)
 
 	case "resume":
 		w.mu.Lock()
@@ -420,7 +420,7 @@ func (w *WANService) handleSignal(senderID string, sig *WANSignalPayload) {
 			tr.Status = "transferring"
 		}
 		w.mu.Unlock()
-		w.app.transferManager.emitTransfers()
+		w.app.transferManager.UpdateExternalStatus(sig.TransferID, "transferring", nil)
 	}
 }
 
