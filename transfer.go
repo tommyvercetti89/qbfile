@@ -228,21 +228,21 @@ func (t *TransferManager) sendFileRoutine(transferID, peerIP string, peerPort in
 				return
 			}
 			cmd := string(buf[:n])
-			if cmd == "pause" {
+			if strings.Contains(cmd, "pause") {
 				t.mu.Lock()
 				if tr, exists := t.activeTransfers[transferID]; exists {
 					tr.Status = "paused"
 				}
 				t.mu.Unlock()
 				t.emitTransfers()
-			} else if cmd == "resume" {
+			} else if strings.Contains(cmd, "resume") {
 				t.mu.Lock()
 				if tr, exists := t.activeTransfers[transferID]; exists {
 					tr.Status = "transferring"
 				}
 				t.mu.Unlock()
 				t.emitTransfers()
-			} else if cmd == "cancel" {
+			} else if strings.Contains(cmd, "cancel") {
 				t.mu.Lock()
 				if tr, exists := t.activeTransfers[transferID]; exists {
 					tr.Status = "failed"
@@ -898,7 +898,9 @@ func (t *TransferManager) PauseTransfer(transferID string) {
 	if exists && tr.Status == "transferring" {
 		tr.Status = "paused"
 		if conn, hasConn := t.activeConns[transferID]; hasConn {
-			go conn.Write([]byte("pause"))
+			if !tr.IsSender {
+				go conn.Write([]byte("pause"))
+			}
 		}
 	}
 	t.mu.Unlock()
@@ -913,7 +915,9 @@ func (t *TransferManager) ResumeTransfer(transferID string) {
 	if exists && tr.Status == "paused" {
 		tr.Status = "transferring"
 		if conn, hasConn := t.activeConns[transferID]; hasConn {
-			go conn.Write([]byte("resume"))
+			if !tr.IsSender {
+				go conn.Write([]byte("resume"))
+			}
 		}
 	}
 	t.mu.Unlock()
@@ -921,17 +925,21 @@ func (t *TransferManager) ResumeTransfer(transferID string) {
 	t.SaveTransfers()
 }
 
-// CancelTransfer cancels an active LAN transfer, sends cancel command to peer, and cleans up local files
+// CancelTransfer cancels an active LAN transfer, sends cancel command to peer if receiver, and cleans up local files
 func (t *TransferManager) CancelTransfer(transferID string) {
 	t.mu.Lock()
 	tr, exists := t.activeTransfers[transferID]
 	if exists && (tr.Status == "transferring" || tr.Status == "paused" || tr.Status == "pending") {
 		tr.Status = "failed"
 		if conn, hasConn := t.activeConns[transferID]; hasConn {
-			go func() {
-				_, _ = conn.Write([]byte("cancel"))
+			if !tr.IsSender {
+				go func() {
+					_, _ = conn.Write([]byte("cancel"))
+					_ = conn.Close()
+				}()
+			} else {
 				_ = conn.Close()
-			}()
+			}
 		}
 		localPath := tr.LocalPath
 		t.mu.Unlock()

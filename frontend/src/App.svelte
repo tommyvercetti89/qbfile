@@ -79,7 +79,12 @@
   
   // Settings & Localization State
   let showSettings = false;
-  let currentLang = "tr";
+  let currentLang = (typeof window !== 'undefined' && localStorage.getItem("qbfile_lang")) || "tr";
+  $: {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem("qbfile_lang", currentLang);
+    }
+  }
   let tempUsername = "";
   let tempStatus = "";
   let tempColor = "";
@@ -164,7 +169,23 @@
       noTransfersYet: "Henüz bu kişiyle transfer bulunmuyor.",
       allTransfersDashboard: "Transfer Geçmişi",
       transferHistorySub: "Bu arkadaşla gönderilen ve alınan dosyalar",
-      actionCancel: "❌ İptal Et"
+      actionCancel: "❌ İptal Et",
+      placeholderWriteMessage: "E2EE Güvenli mesajınızı yazın...",
+      placeholderNickname: "Takma ad...",
+      placeholderStatus: "Durumunuz...",
+      placeholderSearchFriend: "Örn: QB-5F9D-1C4E-7A8B...",
+      placeholderServerAddr: "örn: 127.0.0.1:12130 veya relay.domain.com:12130",
+      copyIdTooltip: "Kimliğimi Kopyalamak İçin Tıkla",
+      confirmDeleteFriend: "adlı arkadaşınızı silmek istediğinize emin misiniz?",
+      deleteFriendError: "Arkadaş silinemedi: ",
+      regSubtitle: "Uçtan Uca Şifreli Yerel Dosya Paylaşımı",
+      regTitle: "Cihazınızı Tanımlayın",
+      regDesc: "Tamamen yerel ve uçtan uca şifreli dosya aktarımı için benzersiz bir cihaz kimliği oluşturulacak.",
+      regLabelNickname: "Cihaz İsmi / Takma Ad (İsteğe Bağlı)",
+      regBtnStart: "Benzersiz Kimlik Oluştur ve Başlat",
+      regBtnLoading: "Kimlik Oluşturuluyor...",
+      regDecryptingTitle: "Güvenli Kimlik Çözülüyor",
+      regDecryptingDesc: "Yerel kriptografik profil dosyası yükleniyor..."
     },
     en: {
       settingsTitle: "Application Settings",
@@ -243,7 +264,23 @@
       noTransfersYet: "No transfers with this contact yet.",
       allTransfersDashboard: "Transfer History",
       transferHistorySub: "Files exchanged with this friend",
-      actionCancel: "❌ Cancel"
+      actionCancel: "❌ Cancel",
+      placeholderWriteMessage: "Write your E2EE secure message...",
+      placeholderNickname: "Nickname...",
+      placeholderStatus: "Your status...",
+      placeholderSearchFriend: "E.g. QB-5F9D-1C4E-7A8B...",
+      placeholderServerAddr: "e.g. 127.0.0.1:12130 or relay.domain.com:12130",
+      copyIdTooltip: "Click to copy my ID",
+      confirmDeleteFriend: "Are you sure you want to delete friend: ",
+      deleteFriendError: "Failed to delete friend: ",
+      regSubtitle: "End-to-End Encrypted Local File Sharing",
+      regTitle: "Identify Your Device",
+      regDesc: "A unique device identity will be created for completely local and end-to-end encrypted file transfers.",
+      regLabelNickname: "Device Name / Nickname (Optional)",
+      regBtnStart: "Create Unique Identity & Start",
+      regBtnLoading: "Creating Identity...",
+      regDecryptingTitle: "Decrypting Secure Identity",
+      regDecryptingDesc: "Loading local cryptographic profile..."
     }
   };
 
@@ -365,17 +402,21 @@
     });
 
     // Live active transfers
+    let isInitialTransfersLoad = true;
     EventsOn("transfers_updated", (transferList) => {
       const oldTransfers = [...transfers];
       transfers = transferList || [];
 
       // Check if a transfer just completed to trigger a notification sound
-      transfers.forEach(t => {
-        const old = oldTransfers.find(o => o.id === t.id);
-        if (t.status === 'completed' && (!old || old.status !== 'completed')) {
-          playNotificationSound('success');
-        }
-      });
+      if (!isInitialTransfersLoad) {
+        transfers.forEach(t => {
+          const old = oldTransfers.find(o => o.id === t.id);
+          if (t.status === 'completed' && (!old || old.status !== 'completed')) {
+            playNotificationSound('success');
+          }
+        });
+      }
+      isInitialTransfersLoad = false;
     });
 
     // Incoming file request trigger
@@ -598,7 +639,10 @@
 
   async function handleRemoveFriend(peer) {
     if (!peer) return;
-    const confirmDelete = confirm(`${peer.username} adlı arkadaşınızı silmek istediğinize emin misiniz?`);
+    const confirmDelete = confirm(currentLang === 'tr'
+      ? `${peer.username} ${t.confirmDeleteFriend}`
+      : `${t.confirmDeleteFriend}${peer.username}?`
+    );
     if (!confirmDelete) return;
 
     try {
@@ -610,7 +654,7 @@
       await RemoveFriend(targetID);
       selectedPeer = null;
     } catch (err) {
-      alert("Arkadaş silinemedi: " + err);
+      alert(t.deleteFriendError + err);
     }
   }
 
@@ -698,18 +742,18 @@
         <circle cx="12" cy="8" r="1" fill="#00a884"/>
       </svg>
       <h1>QBFile</h1>
-      <p class="subtitle">Uçtan Uca Şifreli Yerel Dosya Paylaşımı</p>
+      <p class="subtitle">{t.regSubtitle}</p>
     </div>
 
     {#if !isProfileExists}
       <!-- Registration Form -->
       <form on:submit|preventDefault={handleAutoCreateProfile} class="auth-form animate-slide">
-        <h2>Cihazınızı Tanımlayın</h2>
-        <p class="form-info">Tamamen yerel ve uçtan uca şifreli dosya aktarımı için benzersiz bir cihaz kimliği oluşturulacak.</p>
+        <h2>{t.regTitle}</h2>
+        <p class="form-info">{t.regDesc}</p>
         
         <div class="input-group">
-          <label for="reg-user">Cihaz İsmi / Takma Ad (İsteğe Bağlı)</label>
-          <input type="text" id="reg-user" placeholder="Örn: Ata, Laptop, Ofis-PC..." bind:value={regUsername} autocomplete="off" disabled={authLoading}/>
+          <label for="reg-user">{t.regLabelNickname}</label>
+          <input type="text" id="reg-user" placeholder={t.placeholderNickname} bind:value={regUsername} autocomplete="off" disabled={authLoading}/>
         </div>
 
         {#if errorMsg}
@@ -718,17 +762,17 @@
 
         <button type="submit" class="submit-btn glowing" disabled={authLoading}>
           {#if authLoading}
-            <div class="btn-loader"></div> Kimlik Oluşturuluyor...
+            <div class="btn-loader"></div> {t.regBtnLoading}
           {:else}
-            Benzersiz Kimlik Oluştur ve Başlat
+            {t.regBtnStart}
           {/if}
         </button>
       </form>
     {:else}
       <!-- Auto Login / Decryption Loader -->
       <div class="auth-form animate-slide" style="text-align: center; padding: 2rem 0;">
-        <h2>Güvenli Kimlik Çözülüyor</h2>
-        <p class="form-info" style="margin-bottom: 2rem;">Yerel kriptografik profil dosyası yükleniyor...</p>
+        <h2>{t.regDecryptingTitle}</h2>
+        <p class="form-info" style="margin-bottom: 2rem;">{t.regDecryptingDesc}</p>
         
         <div class="btn-loader" style="width: 40px; height: 40px; border-width: 4px; margin: 0 auto 1.5rem auto;"></div>
         
@@ -759,7 +803,7 @@
         </div>
         <div class="profile-info" style="display: flex; flex-direction: column; justify-content: center; gap: 2px;">
           <h3 style="cursor: pointer; font-size: 0.92rem; font-weight: 600; margin: 0; line-height: 1.2;" on:click={openSettings} title={t.settingsBtn}>{username}</h3>
-          <span style="font-size: 0.68rem; color: var(--text-secondary); cursor: pointer; letter-spacing: 0.3px; display: flex; align-items: center; gap: 4px;" on:click={() => copyToClipboard(peerID)} title="Kimliğimi Kopyalamak İçin Tıkla">
+          <span style="font-size: 0.68rem; color: var(--text-secondary); cursor: pointer; letter-spacing: 0.3px; display: flex; align-items: center; gap: 4px;" on:click={() => copyToClipboard(peerID)} title={t.copyIdTooltip}>
             <span class="pulse-dot" style="background-color: {profileColor}; box-shadow: 0 0 6px {profileColor}; width: 6px; height: 6px;"></span>
             {peerID} 📋
           </span>
@@ -1222,7 +1266,7 @@
               <!-- Text Message Input -->
               <input 
                 type="text" 
-                placeholder="E2EE Güvenli mesajınızı yazın..." 
+                placeholder={t.placeholderWriteMessage} 
                 bind:value={chatMessageInput} 
                 on:keydown={handleChatKeyDown}
                 style="flex: 1; background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: 24px; padding: 12px 20px; color: var(--text-primary); font-family: var(--font-main); font-size: 0.95rem; outline: none; transition: all 0.25s;"
@@ -1328,7 +1372,7 @@
       <!-- Username Input -->
       <div style="display: flex; flex-direction: column; gap: 6px;">
         <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">{t.usernameLabel}</label>
-        <input type="text" placeholder="Takma ad..." bind:value={tempUsername} style="background-color: var(--bg-secondary); border: 1px solid var(--glass-border); border-radius: 8px; padding: 12px 14px; color: white; outline: none; font-size: 0.88rem; font-family: var(--font-main); transition: border 0.25s;" on:focus={(e) => e.target.style.borderColor = 'var(--accent)'} on:blur={(e) => e.target.style.borderColor = 'var(--glass-border)'}/>
+        <input type="text" placeholder={t.placeholderNickname} bind:value={tempUsername} style="background-color: var(--bg-secondary); border: 1px solid var(--glass-border); border-radius: 8px; padding: 12px 14px; color: white; outline: none; font-size: 0.88rem; font-family: var(--font-main); transition: border 0.25s;" on:focus={(e) => e.target.style.borderColor = 'var(--accent)'} on:blur={(e) => e.target.style.borderColor = 'var(--glass-border)'}/>
       </div>
 
       <!-- Accent Color Picker Grid -->
@@ -1344,13 +1388,13 @@
       <!-- Status Message Input -->
       <div style="display: flex; flex-direction: column; gap: 6px;">
         <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">{t.statusLabel}</label>
-        <input type="text" placeholder="Durumunuz..." bind:value={tempStatus} style="background-color: var(--bg-secondary); border: 1px solid var(--glass-border); border-radius: 8px; padding: 12px 14px; color: white; outline: none; font-size: 0.88rem; font-family: var(--font-main); transition: border 0.25s;" on:focus={(e) => e.target.style.borderColor = 'var(--accent)'} on:blur={(e) => e.target.style.borderColor = 'var(--glass-border)'}/>
+        <input type="text" placeholder={t.placeholderStatus} bind:value={tempStatus} style="background-color: var(--bg-secondary); border: 1px solid var(--glass-border); border-radius: 8px; padding: 12px 14px; color: white; outline: none; font-size: 0.88rem; font-family: var(--font-main); transition: border 0.25s;" on:focus={(e) => e.target.style.borderColor = 'var(--accent)'} on:blur={(e) => e.target.style.borderColor = 'var(--glass-border)'}/>
       </div>
 
       <!-- Matchmaking Server Input -->
       <div style="display: flex; flex-direction: column; gap: 6px;">
         <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">{t.serverLabel}</label>
-        <input type="text" placeholder="örn: 127.0.0.1:12130 veya relay.domain.com:12130" bind:value={tempMatchmakingServer} style="background-color: var(--bg-secondary); border: 1px solid var(--glass-border); border-radius: 8px; padding: 12px 14px; color: white; outline: none; font-size: 0.88rem; font-family: var(--font-main); transition: border 0.25s;" on:focus={(e) => e.target.style.borderColor = 'var(--accent)'} on:blur={(e) => e.target.style.borderColor = 'var(--glass-border)'}/>
+        <input type="text" placeholder={t.placeholderServerAddr} bind:value={tempMatchmakingServer} style="background-color: var(--bg-secondary); border: 1px solid var(--glass-border); border-radius: 8px; padding: 12px 14px; color: white; outline: none; font-size: 0.88rem; font-family: var(--font-main); transition: border 0.25s;" on:focus={(e) => e.target.style.borderColor = 'var(--accent)'} on:blur={(e) => e.target.style.borderColor = 'var(--glass-border)'}/>
       </div>
     </div>
 
@@ -1395,7 +1439,7 @@
         <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Arkadaşın Kimliği (Peer ID)</label>
         <input 
           type="text" 
-          placeholder="Örn: QB-5F9D-1C4E-7A8B..." 
+          placeholder={t.placeholderSearchFriend} 
           bind:value={addFriendInput} 
           style="background-color: var(--bg-secondary); border: 1px solid var(--glass-border); border-radius: 8px; padding: 12px 14px; color: white; outline: none; font-size: 0.88rem; font-family: var(--font-main); transition: border 0.25s;" 
           on:focus={(e) => e.target.style.borderColor = 'var(--accent)'} 

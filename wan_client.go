@@ -402,7 +402,11 @@ func (w *WANService) handleSignal(senderID string, sig *WANSignalPayload) {
 		if path != "" {
 			_ = os.Remove(path)
 		}
+		if tr, exists := w.activeTransfers[sig.TransferID]; exists {
+			tr.Status = "failed"
+		}
 		w.mu.Unlock()
+		w.app.transferManager.UpdateExternalStatus(sig.TransferID, "failed", fmt.Errorf("Cancelled by peer"))
 
 	case "pause":
 		w.mu.Lock()
@@ -784,7 +788,7 @@ func (w *WANService) PauseTransfer(transferID string) {
 			Type:       "pause",
 			TransferID: transferID,
 		})
-		w.app.transferManager.emitTransfers()
+		w.app.transferManager.UpdateExternalStatus(transferID, "paused", nil)
 		return
 	}
 	w.mu.Unlock()
@@ -804,7 +808,7 @@ func (w *WANService) ResumeTransfer(transferID string) {
 			Type:       "resume",
 			TransferID: transferID,
 		})
-		w.app.transferManager.emitTransfers()
+		w.app.transferManager.UpdateExternalStatus(transferID, "transferring", nil)
 		return
 	}
 	w.mu.Unlock()
