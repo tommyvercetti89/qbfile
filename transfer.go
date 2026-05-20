@@ -155,12 +155,17 @@ func (t *TransferManager) SendFile(peerIP string, peerPort int, peerProfilePubKe
 	filename := filepath.Base(filePath)
 	filesize := fileInfo.Size()
 
+	peerName := "Connecting..."
+	if t.app != nil {
+		peerName = t.app.ResolvePeerName(peerProfilePubKey, peerIP)
+	}
+
 	transfer := &TransferState{
 		ID:        transferID,
 		Filename:  filename,
 		Filesize:  filesize,
 		Status:    "pending",
-		PeerName:  "Connecting...",
+		PeerName:  peerName,
 		IsSender:  true,
 		LocalPath: filePath,
 	}
@@ -189,9 +194,6 @@ func (t *TransferManager) sendFileRoutine(transferID, peerIP string, peerPort in
 		p, exists := t.activeTransfers[transferID]
 		if exists {
 			p.Status = status
-			if err != nil {
-				p.PeerName = fmt.Sprintf("Error: %s", err.Error())
-			}
 		}
 		t.mu.Unlock()
 		t.emitTransfers()
@@ -301,10 +303,6 @@ func (t *TransferManager) sendFileRoutine(transferID, peerIP string, peerPort in
 	}
 	ephemeralPubBytes := ephemeralPriv.PublicKey().Bytes()
 
-	// Update transfer metadata
-	t.mu.Lock()
-	t.activeTransfers[transferID].PeerName = "Waiting for approval..."
-	t.mu.Unlock()
 	t.emitTransfers()
 	t.SaveTransfers()
 
@@ -355,7 +353,6 @@ func (t *TransferManager) sendFileRoutine(transferID, peerIP string, peerPort in
 	t.mu.Lock()
 	p := t.activeTransfers[transferID]
 	p.Status = "transferring"
-	p.PeerName = handshake.SenderName // Will update with recipient name from response if needed, let's keep it simple
 	t.mu.Unlock()
 	t.emitTransfers()
 	t.SaveTransfers()
@@ -615,7 +612,6 @@ func (t *TransferManager) receiveTransferRoutine(conn net.Conn) {
 		json.NewEncoder(conn).Encode(HandshakeResponse{Accepted: false, Error: fmt.Sprintf("Failed to create file: %s", err.Error())})
 		t.mu.Lock()
 		transfer.Status = "failed"
-		transfer.PeerName = fmt.Sprintf("Error creating file: %s", err.Error())
 		t.mu.Unlock()
 		t.emitTransfers()
 		t.SaveTransfers()
@@ -710,7 +706,6 @@ func (t *TransferManager) receiveTransferRoutine(conn net.Conn) {
 		if err != nil {
 			t.mu.Lock()
 			transfer.Status = "failed"
-			transfer.PeerName = "Decryption error on stream"
 			t.mu.Unlock()
 			t.emitTransfers()
 			t.SaveTransfers()
@@ -721,7 +716,6 @@ func (t *TransferManager) receiveTransferRoutine(conn net.Conn) {
 		if _, err := file.Write(decryptedChunk); err != nil {
 			t.mu.Lock()
 			transfer.Status = "failed"
-			transfer.PeerName = "Disk write error"
 			t.mu.Unlock()
 			t.emitTransfers()
 			t.SaveTransfers()
@@ -763,7 +757,6 @@ func (t *TransferManager) receiveTransferRoutine(conn net.Conn) {
 		transfer.SpeedMB = (float64(transfer.Filesize) / (1024 * 1024)) / totalDuration
 	} else {
 		transfer.Status = "failed"
-		transfer.PeerName = "Transfer cut off before completion"
 	}
 	t.mu.Unlock()
 	t.emitTransfers()
@@ -835,7 +828,6 @@ func (t *TransferManager) SaveTransfers() {
 		// Reset ongoing/paused states to failed when saving to prevent stuck states on restart
 		if savedTr.Status == "transferring" || savedTr.Status == "pending" || savedTr.Status == "paused" {
 			savedTr.Status = "failed"
-			savedTr.PeerName = "Kesildi"
 		}
 		savedTr.SpeedMB = 0
 		list = append(list, &savedTr)
@@ -872,9 +864,6 @@ func (t *TransferManager) UpdateExternalStatus(transferID string, status string,
 	t.mu.Lock()
 	if tr, exists := t.activeTransfers[transferID]; exists {
 		tr.Status = status
-		if err != nil {
-			tr.PeerName = err.Error()
-		}
 	}
 	t.mu.Unlock()
 	t.emitTransfers()

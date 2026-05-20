@@ -848,3 +848,46 @@ func decodePublicKey(encoded string) ([]byte, error) {
 	}
 	return nil, fmt.Errorf("unable to decode public key: %s", encoded)
 }
+
+// ResolvePeerName resolves the display name for a peer given their public key and IP
+func (a *App) ResolvePeerName(pubKeyBytes []byte, peerIP string) string {
+	if len(pubKeyBytes) == 0 {
+		return peerIP
+	}
+
+	// 1. Check online discovered LAN/WAN peers
+	lanPeers := a.discoveryService.GetPeers()
+	var wanPeers []*Peer
+	if a.wanService != nil {
+		wanPeers = a.wanService.GetPeers()
+	}
+	for _, p := range append(lanPeers, wanPeers...) {
+		if bytes.Equal(p.PublicKey, pubKeyBytes) {
+			return p.Username
+		}
+	}
+
+	// 2. Check persistent friend names
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if a.profile != nil {
+		pubHex := hex.EncodeToString(pubKeyBytes)
+		pubB64 := base64.StdEncoding.EncodeToString(pubKeyBytes)
+		if name, ok := a.profile.FriendNames[pubHex]; ok && name != "" {
+			return name
+		}
+		if name, ok := a.profile.FriendNames[pubB64]; ok && name != "" {
+			return name
+		}
+		for _, f := range a.profile.Friends {
+			fClean := strings.TrimSpace(f)
+			if fClean == pubHex || fClean == pubB64 {
+				if name, ok := a.profile.FriendNames[fClean]; ok && name != "" {
+					return name
+				}
+			}
+		}
+	}
+
+	return "Peer (" + peerIP + ")"
+}

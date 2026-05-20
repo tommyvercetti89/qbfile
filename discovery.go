@@ -6,8 +6,6 @@ import (
 	"net"
 	"sync"
 	"time"
-
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 const (
@@ -348,17 +346,7 @@ func (d *DiscoveryService) sweeperLoop() {
 
 // emitPeerList sends the updated active peer list to the frontend
 func (d *DiscoveryService) emitPeerList() {
-	d.mu.RLock()
-	peerList := make([]*Peer, 0, len(d.peers))
-	for _, p := range d.peers {
-		if p.Online {
-			peerList = append(peerList, p)
-		}
-	}
-	d.mu.RUnlock()
-
-	// Emit Wails event
-	if d.app != nil && d.app.ctx != nil {
-		runtime.EventsEmit(d.app.ctx, "peers_updated", peerList)
+	if d.app != nil {
+		d.app.EmitCombinedPeers()
 	}
 }

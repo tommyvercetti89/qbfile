@@ -890,10 +890,10 @@
         </div>
       {:else}
         {#each filteredPeers as peer}
-          <button class="contact-card {viewMode === 'chat' && selectedPeer && selectedPeer.username === peer.username ? 'active' : ''}" on:click={() => { selectedPeer = peer; viewMode = 'chat'; }}>
+          <button class="contact-card {viewMode === 'chat' && selectedPeer && selectedPeer.username === peer.username ? 'active' : ''} {!peer.online ? 'offline' : ''}" on:click={() => { selectedPeer = peer; viewMode = 'chat'; }}>
             <div class="avatar initials" style="background: {peer.color || 'linear-gradient(135deg, #005c4b, #202c33)'}; transition: background 0.3s; position: relative;">
               {peer.username[0].toUpperCase()}
-              <span class="active-dot" style="position: absolute; bottom: 0; right: 0; width: 8px; height: 8px; border-radius: 50%; background-color: {peer.color || 'var(--accent)'}; border: 1.5px solid var(--bg-secondary);"></span>
+              <span class="active-dot" style="position: absolute; bottom: 0; right: 0; width: 8px; height: 8px; border-radius: 50%; background-color: {peer.online ? (peer.color || 'var(--accent)') : '#747f8d'}; border: 1.5px solid var(--bg-secondary);"></span>
             </div>
             <div class="contact-details">
               <div class="contact-row">
@@ -906,7 +906,9 @@
                     <span style="font-family: monospace; font-size: 0.64rem; background: rgba(0, 168, 132, 0.12); padding: 1px 5px; border-radius: 4px; color: var(--accent); border: 1px solid rgba(0, 168, 132, 0.2); letter-spacing: 0.2px; font-weight: 600;">{peer.peer_id.substring(3, 7)}</span>
                   {/if}
                 </span>
-                <span class="contact-time" style="color: {peer.color || 'var(--accent)'}; font-weight: 600; font-size: 0.72rem; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{peer.status || (currentLang === 'tr' ? "Çevrimiçi" : "Online")}</span>
+                <span class="contact-time" style="color: {peer.online ? (peer.color || 'var(--accent)') : '#747f8d'}; font-weight: {peer.online ? '600' : 'normal'}; font-size: 0.72rem; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                  {peer.online ? (peer.status || (currentLang === 'tr' ? "Çevrimiçi" : "Online")) : (currentLang === 'tr' ? "Çevrimdışı" : "Offline")}
+                </span>
               </div>
               <div class="contact-row">
                 <span class="contact-ip">{t.secureChannel}</span>
@@ -1874,6 +1876,15 @@
 
   .contact-card.active {
     background-color: rgba(0, 168, 132, 0.06);
+  }
+
+  .contact-card.offline {
+    opacity: 0.6;
+  }
+
+  .contact-card.offline:hover {
+    opacity: 0.85;
+    background-color: rgba(255, 255, 255, 0.015);
   }
 
   .contact-card.active::before {
