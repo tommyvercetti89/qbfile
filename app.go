@@ -189,6 +189,9 @@ func (a *App) startServices() error {
 		a.wanService.Start(p.PeerID, p.Username, p.PublicKey, p.Color, p.Status)
 	}
 
+	// Emit combined peers list (including offline friends) to the frontend on startup
+	a.EmitCombinedPeers()
+
 	return nil
 }
 
@@ -345,7 +348,7 @@ func (a *App) EmitCombinedPeers() {
 				onlineFriends[base64.StdEncoding.EncodeToString(p.PublicKey)] = true
 			}
 			// Update friend metadata persistently when they come online
-			a.updateFriendMetadata(p.PeerID, p.Username, p.Color)
+			a.updateFriendMetadata(p.PeerID, p.PublicKey, p.Username, p.Color)
 		}
 	}
 
@@ -389,7 +392,7 @@ func (a *App) EmitCombinedPeers() {
 	runtime.EventsEmit(a.ctx, "peers_updated", friendsOnly)
 }
 
-func (a *App) updateFriendMetadata(peerID string, username string, color string) {
+func (a *App) updateFriendMetadata(peerID string, pubKey []byte, username string, color string) {
 	a.mu.Lock()
 	if a.profile == nil {
 		a.mu.Unlock()
@@ -402,15 +405,27 @@ func (a *App) updateFriendMetadata(peerID string, username string, color string)
 		a.profile.FriendColors = make(map[string]string)
 	}
 
+	keysToUpdate := []string{peerID}
+	if len(pubKey) > 0 {
+		keysToUpdate = append(keysToUpdate, hex.EncodeToString(pubKey))
+		keysToUpdate = append(keysToUpdate, base64.StdEncoding.EncodeToString(pubKey))
+	}
+
 	changed := false
-	if a.profile.FriendNames[peerID] != username && username != "" && !strings.Contains(username, "Arkadaş (") {
-		a.profile.FriendNames[peerID] = username
-		changed = true
+	for _, keyStr := range keysToUpdate {
+		if keyStr == "" {
+			continue
+		}
+		if a.profile.FriendNames[keyStr] != username && username != "" && !strings.Contains(username, "Arkadaş (") {
+			a.profile.FriendNames[keyStr] = username
+			changed = true
+		}
+		if a.profile.FriendColors[keyStr] != color && color != "" && color != "#6c757d" {
+			a.profile.FriendColors[keyStr] = color
+			changed = true
+		}
 	}
-	if a.profile.FriendColors[peerID] != color && color != "" && color != "#6c757d" {
-		a.profile.FriendColors[peerID] = color
-		changed = true
-	}
+
 	p := a.profile
 	key := a.sessionKey
 	a.mu.Unlock()
@@ -517,6 +532,105 @@ func (a *App) OpenReceivedFile(filePath string) error {
 	cmd := exec.Command("cmd", "/c", "start", "", filePath)
 	return cmd.Run()
 }
+
+// FilePreviewResult is returned by GetFilePreview to workaround Wails v2 multiple non-error return values limitation
+type FilePreviewResult struct {
+	Type    string `json:"type"`
+	Content string `json:"content"`
+}
+
+// GetFilePreview reads a file and returns its type ("text", "image", "pdf", "unsupported") and base64-encoded content/dataURL or raw text.
+func (a *App) GetFilePreview(filePath string) (*FilePreviewResult, error) {
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("file does not exist: %s", filePath)
+	}
+
+	ext := strings.ToLower(filepath.Ext(filePath))
+	switch ext {
+	case ".txt", ".md", ".json", ".xml", ".html", ".css", ".js", ".go", ".py", ".cpp", ".h", ".c", ".rs", ".ts", ".sh", ".bat", ".ini", ".yaml", ".yml", ".log":
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			return nil, err
+		}
+		if len(data) > 500*1024 {
+			return &FilePreviewResult{
+				Type:    "text",
+				Content: string(data[:500*1024]) + "\n\n...[Dosya çok büyük, ilk 500 KB gösteriliyor]...",
+			}, nil
+		}
+		return &FilePreviewResult{
+			Type:    "text",
+			Content: string(data),
+		}, nil
+
+	case ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".svg":
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			return nil, err
+		}
+		mime := "image/jpeg"
+		if ext == ".png" {
+			mime = "image/png"
+		} else if ext == ".webp" {
+			mime = "image/webp"
+		} else if ext == ".gif" {
+			mime = "image/gif"
+		} else if ext == ".bmp" {
+			mime = "image/x-ms-bmp"
+		} else if ext == ".svg" {
+			mime = "image/svg+xml"
+		}
+		b64 := base64.StdEncoding.EncodeToString(data)
+		return &FilePreviewResult{
+			Type:    "image",
+			Content: fmt.Sprintf("data:%s;base64,%s", mime, b64),
+		}, nil
+
+	case ".pdf":
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			return nil, err
+		}
+		b64 := base64.StdEncoding.EncodeToString(data)
+		return &FilePreviewResult{
+			Type:    "pdf",
+			Content: fmt.Sprintf("data:application/pdf;base64,%s", b64),
+		}, nil
+
+	case ".mp4", ".webm", ".ogg", ".mov":
+		stat, err := os.Stat(filePath)
+		if err != nil {
+			return nil, err
+		}
+		if stat.Size() > 50*1024*1024 {
+			return nil, fmt.Errorf("video file is too large for preview (max 50MB)")
+		}
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			return nil, err
+		}
+		mime := "video/mp4"
+		if ext == ".webm" {
+			mime = "video/webm"
+		} else if ext == ".ogg" {
+			mime = "video/ogg"
+		} else if ext == ".mov" {
+			mime = "video/quicktime"
+		}
+		b64 := base64.StdEncoding.EncodeToString(data)
+		return &FilePreviewResult{
+			Type:    "video",
+			Content: fmt.Sprintf("data:%s;base64,%s", mime, b64),
+		}, nil
+
+	default:
+		return &FilePreviewResult{
+			Type:    "unsupported",
+			Content: "",
+		}, nil
+	}
+}
+
 
 // OpenFolderAndSelect opens Windows Explorer with file highlighted
 func (a *App) OpenFolderAndSelect(filePath string) error {
@@ -689,27 +803,41 @@ func (a *App) SendFolderToPeer(peerIP string, peerPort int, peerPubKeyHex string
 	return a.transferManager.SendFile(peerIP, peerPort, pubKeyBytes, actualZipPath)
 }
 
+// isWANTransfer checks if a transfer is managed by the WAN service
+func (a *App) isWANTransfer(transferID string) bool {
+	if a.wanService == nil {
+		return false
+	}
+	a.wanService.mu.RLock()
+	defer a.wanService.mu.RUnlock()
+	_, exists := a.wanService.activeTransfers[transferID]
+	return exists
+}
+
 // PauseTransfer triggers active chunk pause
 func (a *App) PauseTransfer(transferID string) {
-	a.transferManager.PauseTransfer(transferID)
-	if a.wanService != nil {
+	if a.isWANTransfer(transferID) {
 		a.wanService.PauseTransfer(transferID)
+	} else {
+		a.transferManager.PauseTransfer(transferID)
 	}
 }
 
 // ResumeTransfer resumes active chunk transfer
 func (a *App) ResumeTransfer(transferID string) {
-	a.transferManager.ResumeTransfer(transferID)
-	if a.wanService != nil {
+	if a.isWANTransfer(transferID) {
 		a.wanService.ResumeTransfer(transferID)
+	} else {
+		a.transferManager.ResumeTransfer(transferID)
 	}
 }
 
 // CancelTransfer cancels active chunk transfer and cleans up files
 func (a *App) CancelTransfer(transferID string) {
-	a.transferManager.CancelTransfer(transferID)
-	if a.wanService != nil {
+	if a.isWANTransfer(transferID) {
 		a.wanService.CancelTransfer(transferID)
+	} else {
+		a.transferManager.CancelTransfer(transferID)
 	}
 }
 

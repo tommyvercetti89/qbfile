@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"bufio"
 	"crypto/ecdh"
 	"crypto/sha256"
 	"encoding/binary"
@@ -20,23 +21,24 @@ import (
 )
 
 const (
-	ChunkSize       = 256 * 1024 // 256 KB chunks for high-speed transfers
+	ChunkSize       = 1024 * 1024 // 1 MB chunks for local high-speed transfers
 	TransferTimeout = 60 * time.Second
 )
 
 // TransferState tracks active and past transfers
 type TransferState struct {
-	ID        string  `json:"id"`
-	Filename  string  `json:"filename"`
-	Filesize  int64   `json:"filesize"`
-	BytesSent int64   `json:"bytes_sent"`
-	BytesRecv int64   `json:"bytes_recv"`
-	SpeedMB   float64 `json:"speed_mb"` // MB/s
-	Percent   int     `json:"percent"`
-	Status    string  `json:"status"` // "pending", "transferring", "completed", "failed", "declined"
-	PeerName  string  `json:"peer_name"`
-	IsSender  bool    `json:"is_sender"`
-	LocalPath string  `json:"local_path"`
+	ID         string  `json:"id"`
+	Filename   string  `json:"filename"`
+	Filesize   int64   `json:"filesize"`
+	BytesSent  int64   `json:"bytes_sent"`
+	BytesRecv  int64   `json:"bytes_recv"`
+	SpeedMB    float64 `json:"speed_mb"` // MB/s
+	Percent    int     `json:"percent"`
+	Status     string  `json:"status"` // "pending", "transferring", "completed", "failed", "declined"
+	PeerName   string  `json:"peer_name"`
+	IsSender   bool    `json:"is_sender"`
+	LocalPath  string  `json:"local_path"`
+	FileExists bool    `json:"file_exists"`
 }
 
 // HandshakeMessage contains sender identification and ephemeral keys
@@ -210,6 +212,8 @@ func (t *TransferManager) sendFileRoutine(transferID, peerIP string, peerPort in
 
 	if tcpConn, ok := conn.(*net.TCPConn); ok {
 		_ = tcpConn.SetNoDelay(true)
+		_ = tcpConn.SetReadBuffer(1024 * 1024)
+		_ = tcpConn.SetWriteBuffer(1024 * 1024)
 	}
 
 	t.mu.Lock()
@@ -221,41 +225,7 @@ func (t *TransferManager) sendFileRoutine(transferID, peerIP string, peerPort in
 		t.mu.Unlock()
 	}()
 
-	// Start a background loop to listen for pause/resume/cancel signals from the receiver
-	go func() {
-		buf := make([]byte, 16)
-		for {
-			n, err := conn.Read(buf)
-			if err != nil {
-				return
-			}
-			cmd := string(buf[:n])
-			if strings.Contains(cmd, "pause") {
-				t.mu.Lock()
-				if tr, exists := t.activeTransfers[transferID]; exists {
-					tr.Status = "paused"
-				}
-				t.mu.Unlock()
-				t.emitTransfers()
-			} else if strings.Contains(cmd, "resume") {
-				t.mu.Lock()
-				if tr, exists := t.activeTransfers[transferID]; exists {
-					tr.Status = "transferring"
-				}
-				t.mu.Unlock()
-				t.emitTransfers()
-			} else if strings.Contains(cmd, "cancel") {
-				t.mu.Lock()
-				if tr, exists := t.activeTransfers[transferID]; exists {
-					tr.Status = "failed"
-				}
-				t.mu.Unlock()
-				t.emitTransfers()
-				_ = conn.Close()
-				return
-			}
-		}
-	}()
+
 
 	// 1. Perform ECDH Shared Secret Agreement
 	localPriv, err := ecdh.P256().NewPrivateKey(t.profile.PrivateKey)
@@ -357,6 +327,42 @@ func (t *TransferManager) sendFileRoutine(transferID, peerIP string, peerPort in
 	t.emitTransfers()
 	t.SaveTransfers()
 
+	// Start a background loop to listen for pause/resume/cancel signals from the receiver
+	go func() {
+		buf := make([]byte, 16)
+		for {
+			n, err := conn.Read(buf)
+			if err != nil {
+				return
+			}
+			cmd := string(buf[:n])
+			if strings.Contains(cmd, "pause") {
+				t.mu.Lock()
+				if tr, exists := t.activeTransfers[transferID]; exists {
+					tr.Status = "paused"
+				}
+				t.mu.Unlock()
+				t.emitTransfers()
+			} else if strings.Contains(cmd, "resume") {
+				t.mu.Lock()
+				if tr, exists := t.activeTransfers[transferID]; exists {
+					tr.Status = "transferring"
+				}
+				t.mu.Unlock()
+				t.emitTransfers()
+			} else if strings.Contains(cmd, "cancel") {
+				t.mu.Lock()
+				if tr, exists := t.activeTransfers[transferID]; exists {
+					tr.Status = "failed"
+				}
+				t.mu.Unlock()
+				t.emitTransfers()
+				_ = conn.Close()
+				return
+			}
+		}
+	}()
+
 	// Open file to stream
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -364,6 +370,8 @@ func (t *TransferManager) sendFileRoutine(transferID, peerIP string, peerPort in
 		return
 	}
 	defer file.Close()
+
+	reader := bufio.NewReaderSize(file, 1024*1024)
 
 	// Stream chunks encrypted with AES-GCM
 	fileBuf := make([]byte, ChunkSize)
@@ -395,7 +403,7 @@ func (t *TransferManager) sendFileRoutine(transferID, peerIP string, peerPort in
 			time.Sleep(100 * time.Millisecond)
 		}
 
-		n, err := file.Read(fileBuf)
+		n, err := reader.Read(fileBuf)
 		if n > 0 {
 			// Encrypt chunk
 			encryptedChunk, err := EncryptGCM(fileBuf[:n], sessionKey)
@@ -485,6 +493,8 @@ func (t *TransferManager) receiveTransferRoutine(conn net.Conn) {
 
 	if tcpConn, ok := conn.(*net.TCPConn); ok {
 		_ = tcpConn.SetNoDelay(true)
+		_ = tcpConn.SetReadBuffer(1024 * 1024)
+		_ = tcpConn.SetWriteBuffer(1024 * 1024)
 	}
 
 	// 1. Read handshake size (4 bytes)
@@ -617,7 +627,19 @@ func (t *TransferManager) receiveTransferRoutine(conn net.Conn) {
 		t.SaveTransfers()
 		return
 	}
-	defer file.Close()
+
+	// Deferred cleanup ensures file is closed first, then deleted on Windows if not completed
+	defer func() {
+		_ = file.Close()
+		t.mu.RLock()
+		status := transfer.Status
+		t.mu.RUnlock()
+		if status != "completed" && transfer.LocalPath != "" {
+			_ = os.Remove(transfer.LocalPath)
+		}
+	}()
+
+	writer := bufio.NewWriterSize(file, 1024*1024)
 
 	t.mu.Lock()
 	transfer.LocalPath = savePath
@@ -650,31 +672,6 @@ func (t *TransferManager) receiveTransferRoutine(conn net.Conn) {
 	var lastReportBytes int64
 
 	for {
-		// Pause / cancel check loop
-		for {
-			t.mu.RLock()
-			tr, exists := t.activeTransfers[transferID]
-			var status string
-			if exists {
-				status = tr.Status
-			}
-			t.mu.RUnlock()
-
-			if status == "failed" {
-				// Cancelled by receiver — clean up partial file
-				file.Close()
-				_ = os.Remove(transfer.LocalPath)
-				t.emitTransfers()
-				t.SaveTransfers()
-				return
-			}
-			if status != "paused" {
-				break
-			}
-			lastReportTime = time.Now()
-			time.Sleep(100 * time.Millisecond)
-		}
-
 		// Read encrypted chunk size (4 bytes)
 		if _, err := io.ReadFull(conn, sizeBuf); err != nil {
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
@@ -689,6 +686,48 @@ func (t *TransferManager) receiveTransferRoutine(conn net.Conn) {
 			return
 		}
 		chunkSize := binary.BigEndian.Uint32(sizeBuf)
+
+		// Handle control packets (prefixed with 0xFFFFFFFF)
+		if chunkSize == 0xFFFFFFFF {
+			if _, err := io.ReadFull(conn, sizeBuf); err != nil {
+				t.mu.Lock()
+				transfer.Status = "failed"
+				t.mu.Unlock()
+				t.emitTransfers()
+				t.SaveTransfers()
+				return
+			}
+			cmdLen := binary.BigEndian.Uint32(sizeBuf)
+			cmdBuf := make([]byte, cmdLen)
+			if _, err := io.ReadFull(conn, cmdBuf); err != nil {
+				t.mu.Lock()
+				transfer.Status = "failed"
+				t.mu.Unlock()
+				t.emitTransfers()
+				t.SaveTransfers()
+				return
+			}
+			cmd := string(cmdBuf)
+			if cmd == "pause" {
+				t.mu.Lock()
+				transfer.Status = "paused"
+				t.mu.Unlock()
+				t.emitTransfers()
+			} else if cmd == "resume" {
+				t.mu.Lock()
+				transfer.Status = "transferring"
+				t.mu.Unlock()
+				t.emitTransfers()
+			} else if cmd == "cancel" {
+				t.mu.Lock()
+				transfer.Status = "failed"
+				t.mu.Unlock()
+				t.emitTransfers()
+				t.SaveTransfers()
+				return
+			}
+			continue
+		}
 
 		// Read encrypted chunk bytes
 		encryptedChunk := make([]byte, chunkSize)
@@ -712,8 +751,8 @@ func (t *TransferManager) receiveTransferRoutine(conn net.Conn) {
 			return
 		}
 
-		// Write to local disk
-		if _, err := file.Write(decryptedChunk); err != nil {
+		// Write to local disk via bufio.Writer
+		if _, err := writer.Write(decryptedChunk); err != nil {
 			t.mu.Lock()
 			transfer.Status = "failed"
 			t.mu.Unlock()
@@ -743,7 +782,7 @@ func (t *TransferManager) receiveTransferRoutine(conn net.Conn) {
 		}
 	}
 
-	// Verify size matched
+	// Verify size matched and flush writer
 	t.mu.Lock()
 	totalDuration := time.Since(startTime).Seconds()
 	if totalDuration == 0 {
@@ -751,6 +790,7 @@ func (t *TransferManager) receiveTransferRoutine(conn net.Conn) {
 	}
 
 	if bytesRecv == transfer.Filesize {
+		_ = writer.Flush()
 		transfer.Status = "completed"
 		transfer.Percent = 100
 		transfer.BytesRecv = bytesRecv
@@ -770,7 +810,12 @@ func (t *TransferManager) GetTransfers() []*TransferState {
 
 	list := make([]*TransferState, 0, len(t.activeTransfers))
 	for _, tr := range t.activeTransfers {
-		list = append(list, tr)
+		trCopy := *tr
+		if trCopy.LocalPath != "" {
+			_, err := os.Stat(trCopy.LocalPath)
+			trCopy.FileExists = (err == nil)
+		}
+		list = append(list, &trCopy)
 	}
 	return list
 }
@@ -780,7 +825,12 @@ func (t *TransferManager) emitTransfers() {
 	t.mu.RLock()
 	list := make([]*TransferState, 0, len(t.activeTransfers))
 	for _, tr := range t.activeTransfers {
-		list = append(list, tr)
+		trCopy := *tr
+		if trCopy.LocalPath != "" {
+			_, err := os.Stat(trCopy.LocalPath)
+			trCopy.FileExists = (err == nil)
+		}
+		list = append(list, &trCopy)
 	}
 	t.mu.RUnlock()
 
@@ -815,6 +865,15 @@ func deduplicatePath(path string) string {
 		}
 		counter++
 	}
+}
+
+// sendControlPacket sends a control command to the connection prefixed by 0xFFFFFFFF
+func (t *TransferManager) sendControlPacket(conn net.Conn, cmd string) {
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint32(buf[0:4], 0xFFFFFFFF)
+	binary.BigEndian.PutUint32(buf[4:8], uint32(len(cmd)))
+	_, _ = conn.Write(buf)
+	_, _ = conn.Write([]byte(cmd))
 }
 
 // SaveTransfers saves active and past transfers to a local JSON file
@@ -889,6 +948,8 @@ func (t *TransferManager) PauseTransfer(transferID string) {
 		if conn, hasConn := t.activeConns[transferID]; hasConn {
 			if !tr.IsSender {
 				go conn.Write([]byte("pause"))
+			} else {
+				go t.sendControlPacket(conn, "pause")
 			}
 		}
 	}
@@ -906,6 +967,8 @@ func (t *TransferManager) ResumeTransfer(transferID string) {
 		if conn, hasConn := t.activeConns[transferID]; hasConn {
 			if !tr.IsSender {
 				go conn.Write([]byte("resume"))
+			} else {
+				go t.sendControlPacket(conn, "resume")
 			}
 		}
 	}
@@ -924,10 +987,15 @@ func (t *TransferManager) CancelTransfer(transferID string) {
 			if !tr.IsSender {
 				go func() {
 					_, _ = conn.Write([]byte("cancel"))
+					time.Sleep(100 * time.Millisecond)
 					_ = conn.Close()
 				}()
 			} else {
-				_ = conn.Close()
+				go func() {
+					t.sendControlPacket(conn, "cancel")
+					time.Sleep(100 * time.Millisecond)
+					_ = conn.Close()
+				}()
 			}
 		}
 		localPath := tr.LocalPath

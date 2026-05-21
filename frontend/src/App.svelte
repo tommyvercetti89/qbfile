@@ -33,7 +33,9 @@
     UpdateServerAddress,
     SendTextMessage,
     AddFriend,
-    RemoveFriend
+    RemoveFriend,
+    GetFilePreview,
+    GetTransfers
   } from '../wailsjs/go/main/App.js';
   
   import { EventsOn } from '../wailsjs/runtime/runtime.js';
@@ -185,7 +187,13 @@
       regBtnStart: "Benzersiz Kimlik Oluştur ve Başlat",
       regBtnLoading: "Kimlik Oluşturuluyor...",
       regDecryptingTitle: "Güvenli Kimlik Çözülüyor",
-      regDecryptingDesc: "Yerel kriptografik profil dosyası yükleniyor..."
+      regDecryptingDesc: "Yerel kriptografik profil dosyası yükleniyor...",
+      requestsShort: "İstekler",
+      previewBtn: "Önizle",
+      previewTitle: "Dosya Önizleme",
+      chatTab: "Sohbet",
+      actionResend: "Tekrar Gönder",
+      actionRedownload: "Tekrar İndir"
     },
     en: {
       settingsTitle: "Application Settings",
@@ -280,7 +288,13 @@
       regBtnStart: "Create Unique Identity & Start",
       regBtnLoading: "Creating Identity...",
       regDecryptingTitle: "Decrypting Secure Identity",
-      regDecryptingDesc: "Loading local cryptographic profile..."
+      regDecryptingDesc: "Loading local cryptographic profile...",
+      requestsShort: "Requests",
+      previewBtn: "Preview",
+      previewTitle: "File Preview",
+      chatTab: "Chat",
+      actionResend: "Resend",
+      actionRedownload: "Redownload"
     }
   };
 
@@ -392,7 +406,7 @@
     EventsOn("peers_updated", (peerList) => {
       peers = peerList || [];
       if (selectedPeer) {
-        const found = peers.find(p => p.username === selectedPeer.username);
+        const found = peers.find(p => (p.peer_id && selectedPeer.peer_id && p.peer_id === selectedPeer.peer_id) || p.username === selectedPeer.username);
         if (found) {
           selectedPeer = found;
         } else {
@@ -461,6 +475,7 @@
             GetProfileStatus().then(s => profileStatus = s || "Dosya almaya hazır");
             isLoggedIn = true;
             authLoading = false;
+            GetTransfers().then(list => transfers = list || []);
           })
           .catch(err => {
             errorMsg = "Profil yüklenemedi: " + err;
@@ -489,6 +504,7 @@
         GetProfileStatus().then(s => profileStatus = s || "Dosya almaya hazır");
         isLoggedIn = true;
         authLoading = false;
+        GetTransfers().then(list => transfers = list || []);
       })
       .catch(err => {
         errorMsg = "Profil oluşturulamadı: " + err;
@@ -729,6 +745,122 @@
     if (['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'md'].includes(ext)) return 'document';
     return 'file';
   }
+
+  // Scroll and Preview additions
+  let chatContainer;
+  let showScrollDownBtn = false;
+  let showFriendRequestsModal = false;
+  let showPreviewModal = false;
+  let previewLoading = false;
+  let previewFileName = "";
+  let previewFileType = ""; // 'text', 'image', 'pdf', 'unsupported'
+  let previewContent = "";
+  let previewError = "";
+
+  function scrollToBottom(behavior = 'smooth') {
+    if (chatContainer) {
+      chatContainer.scrollTo({
+        top: chatContainer.scrollHeight,
+        behavior
+      });
+    }
+  }
+
+  function handleChatScroll() {
+    if (!chatContainer) return;
+    const threshold = 150;
+    const distanceFromBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight;
+    showScrollDownBtn = distanceFromBottom > threshold;
+  }
+
+  $: {
+    if (selectedPeer) {
+      // scroll to bottom on peer selection
+      setTimeout(() => scrollToBottom('auto'), 50);
+    }
+  }
+
+  $: {
+    if (transfers && transfers.length) {
+      if (chatContainer) {
+        const distanceFromBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight;
+        if (distanceFromBottom < 100) {
+          setTimeout(() => scrollToBottom('smooth'), 50);
+        }
+      }
+    }
+  }
+
+  async function openPreview(filePath, filename) {
+    previewFileName = filename;
+    showPreviewModal = true;
+    previewLoading = true;
+    previewError = "";
+    previewContent = "";
+    previewFileType = "";
+
+    const ext = filename.split('.').pop().toLowerCase();
+    if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp'].includes(ext)) {
+      previewFileType = 'image';
+    } else if (ext === 'pdf') {
+      previewFileType = 'pdf';
+    } else if (['mp4', 'webm', 'ogg', 'mov'].includes(ext)) {
+      previewFileType = 'video';
+    } else if (['txt', 'md', 'json', 'xml', 'html', 'css', 'js', 'go', 'py', 'rs', 'ts', 'sh', 'bat', 'ini', 'yaml', 'yml', 'log'].includes(ext)) {
+      previewFileType = 'text';
+    } else {
+      previewFileType = 'unsupported';
+      previewError = currentLang === 'tr' ? "Bu dosya türü önizlenemiyor." : "This file type cannot be previewed.";
+      previewLoading = false;
+      return;
+    }
+
+    try {
+      const res = await GetFilePreview(filePath);
+      if (res && res.type) {
+        previewFileType = res.type;
+        previewContent = res.content;
+      } else {
+        previewFileType = 'unsupported';
+        previewError = currentLang === 'tr' ? "Dosya önizleme formatı geçersiz." : "Invalid file preview format.";
+      }
+    } catch (err) {
+      console.error("Preview load error:", err);
+      previewError = (currentLang === 'tr' ? "Önizleme yüklenemedi: " : "Failed to load preview: ") + err;
+    } finally {
+      previewLoading = false;
+    }
+  }
+
+  function handleResendFile(tr) {
+    if (!selectedPeer || !selectedPeer.online) {
+      alert(currentLang === 'tr' ? "Lütfen bu işlemi yapmak için aktif/çevrimiçi bir arkadaş seçin." : "Please select an active/online friend to perform this action.");
+      return;
+    }
+    if (tr.file_exists) {
+      SendPathToPeer(selectedPeer.ip, selectedPeer.tcp_port, selectedPeer.public_key, tr.local_path)
+        .catch(err => {
+          alert((currentLang === 'tr' ? "Tekrar gönderim başarısız: " : "Failed to resend: ") + err);
+        });
+    } else if (tr.is_sender) {
+      SelectFile().then(path => {
+        if (path) {
+          SendPathToPeer(selectedPeer.ip, selectedPeer.tcp_port, selectedPeer.public_key, path)
+            .catch(err => {
+              alert((currentLang === 'tr' ? "Gönderim başarısız: " : "Failed to send: ") + err);
+            });
+        }
+      });
+    } else {
+      const reqMsg = currentLang === 'tr' ? 
+        `[Dosya İsteği] Lütfen bu dosyayı tekrar gönderir misin: ${tr.filename}` : 
+        `[File Request] Please resend this file: ${tr.filename}`;
+      SendTextMessage(selectedPeer.ip, selectedPeer.tcp_port, selectedPeer.public_key, reqMsg)
+        .catch(err => {
+          alert((currentLang === 'tr' ? "İstek gönderilemedi: " : "Failed to send request: ") + err);
+        });
+    }
+  }
 </script>
 
 <!-- AUTHENTICATION SCREEN -->
@@ -820,53 +952,25 @@
     </header>
 
     <!-- Friend Management Action Row -->
-    <div style="display: flex; gap: 8px; padding: 4px 16px 12px; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-light); flex-wrap: wrap;">
-      <div style="display: flex; gap: 4px; background: rgba(255,255,255,0.03); padding: 2px; border-radius: 8px;">
-        <button on:click={() => { viewMode = 'chat'; }} class="tab-btn {viewMode === 'chat' ? 'active' : ''}" style="border: none; background: {viewMode === 'chat' ? 'var(--accent)' : 'transparent'}; color: {viewMode === 'chat' ? 'white' : 'var(--text-secondary)'}; font-size: 0.72rem; font-weight: 700; padding: 6px 10px; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.5px;">
-          {t.myConnections}
+    <div style="display: flex; gap: 8px; padding: 10px 16px; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-light);">
+      <span style="font-size: 0.85rem; font-weight: 700; color: white; text-transform: uppercase; letter-spacing: 0.5px;">
+        {t.myConnections}
+      </span>
+      <div style="display: flex; gap: 6px; align-items: center;">
+        <button on:click={() => showFriendRequestsModal = true} class="bubble-btn" style="position: relative; padding: 6px 10px; font-size: 0.72rem; display: flex; align-items: center; gap: 4px; border-radius: 8px; background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.08);">
+          <span>{t.requestsShort}</span>
+          {#if friendRequests.length > 0}
+            <span style="background: #ea4335; color: white; border-radius: 50%; padding: 1px 5px; font-size: 0.6rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; height: 14px; min-width: 14px;">
+              {friendRequests.length}
+            </span>
+          {/if}
         </button>
-        <button on:click={() => { viewMode = 'transfers'; }} class="tab-btn {viewMode === 'transfers' ? 'active' : ''}" style="border: none; background: {viewMode === 'transfers' ? 'var(--accent)' : 'transparent'}; color: {viewMode === 'transfers' ? 'white' : 'var(--text-secondary)'}; font-size: 0.72rem; font-weight: 700; padding: 6px 10px; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.5px;">
-          {t.sentItems}
+        <button on:click={() => showAddFriendModal = true} class="glowing" style="background: var(--accent); color: white; border: none; padding: 6px 10px; border-radius: 8px; font-size: 0.72rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px; box-shadow: 0 4px 15px var(--accent-glow); transition: all 0.25s;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width: 12px; height: 12px;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          {t.addFriend}
         </button>
       </div>
-      
-      <button on:click={() => showAddFriendModal = true} class="glowing" style="background: var(--accent); color: white; border: none; padding: 6px 10px; border-radius: 8px; font-size: 0.72rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px; box-shadow: 0 4px 15px var(--accent-glow); transition: all 0.25s;">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width: 12px; height: 12px;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
-        {t.addFriend}
-      </button>
     </div>
-
-    <!-- Friend Requests -->
-    {#if friendRequests.length > 0}
-      <div class="friend-requests-section animate-slide" style="padding: 10px 16px; border-bottom: 1px solid var(--border-light); background: rgba(0, 168, 132, 0.04);">
-        <span style="font-size: 0.72rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 8px;">
-          {t.friendRequests} ({friendRequests.length})
-        </span>
-        <div style="display: flex; flex-direction: column; gap: 8px;">
-          {#each friendRequests as req}
-            <div class="glass-panel" style="padding: 10px; border-radius: 8px; border: 1px solid rgba(0,168,132,0.15); display: flex; flex-direction: column; gap: 6px; background: rgba(20,20,20,0.4);">
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <div class="avatar initials" style="width: 28px; height: 28px; font-size: 0.8rem; background: var(--accent); display: flex; align-items: center; justify-content: center; border-radius: 50%; color: white; font-weight: 700;">
-                  {req.username ? req.username[0].toUpperCase() : '?'}
-                </div>
-                <div style="display: flex; flex-direction: column; min-width: 0; flex: 1;">
-                  <span style="font-size: 0.82rem; font-weight: 600; color: white; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{req.username}</span>
-                  <span style="font-size: 0.6rem; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{req.peer_id}</span>
-                </div>
-              </div>
-              <div style="display: flex; gap: 6px;">
-                <button on:click={() => acceptFriendRequest(req)} class="bubble-btn accept-btn glowing" style="flex: 1; padding: 4px 8px; font-size: 0.7rem; font-weight: 700; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer;">
-                  {t.acceptBtnShort}
-                </button>
-                <button on:click={() => rejectFriendRequest(req)} class="bubble-btn decline-btn" style="flex: 1; padding: 4px 8px; font-size: 0.7rem; font-weight: 700; background: rgba(255,255,255,0.05); border: 1px solid var(--border-light); color: var(--text-secondary); border-radius: 4px; cursor: pointer;">
-                  {t.rejectBtnShort}
-                </button>
-              </div>
-            </div>
-          {/each}
-        </div>
-      </div>
-    {/if}
 
     <!-- Search / Filter -->
     <div class="search-container">
@@ -890,7 +994,7 @@
         </div>
       {:else}
         {#each filteredPeers as peer}
-          <button class="contact-card {viewMode === 'chat' && selectedPeer && selectedPeer.username === peer.username ? 'active' : ''} {!peer.online ? 'offline' : ''}" on:click={() => { selectedPeer = peer; viewMode = 'chat'; }}>
+          <button class="contact-card {selectedPeer && selectedPeer.username === peer.username ? 'active' : ''} {!peer.online ? 'offline' : ''}" on:click={() => { selectedPeer = peer; viewMode = 'chat'; GetTransfers().then(list => transfers = list || []); }}>
             <div class="avatar initials" style="background: {peer.color || 'linear-gradient(135deg, #005c4b, #202c33)'}; transition: background 0.3s; position: relative;">
               {peer.username[0].toUpperCase()}
               <span class="active-dot" style="position: absolute; bottom: 0; right: 0; width: 8px; height: 8px; border-radius: 50%; background-color: {peer.online ? (peer.color || 'var(--accent)') : '#747f8d'}; border: 1.5px solid var(--bg-secondary);"></span>
@@ -926,108 +1030,7 @@
 
   <!-- RIGHT WINDOW (SPLASH OR ACTIVE CHAT) -->
   <main class="chat-area">
-    {#if viewMode === 'transfers'}
-      <!-- Transfers Dashboard (filtered to selected peer) -->
-      <div class="transfers-dashboard" style="display: flex; flex-direction: column; height: 100%; background: var(--bg-primary);">
-        <header style="padding: 20px 24px; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center; background: var(--bg-secondary); box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
-          <div>
-            <h1 style="font-size: 1.2rem; font-weight: 700; color: white; margin: 0; font-family: var(--font-main);">
-              {selectedPeer ? selectedPeer.username : t.allTransfersDashboard}
-            </h1>
-            <p style="font-size: 0.78rem; color: var(--text-secondary); margin: 3px 0 0 0; font-family: var(--font-main);">{t.transferHistorySub}</p>
-          </div>
-          {#if transfers.length > 0}
-            <button on:click={handleClearHistory} class="bubble-btn animate-fade" style="background: rgba(234, 67, 53, 0.08); border-color: rgba(234, 67, 53, 0.15); color: #ff8f8f; padding: 6px 12px; font-weight: 600; display: flex; align-items: center; gap: 5px;" title={t.clearHistory}>
-              {t.clearHistoryBtn}
-            </button>
-          {/if}
-        </header>
-
-        <div style="flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 12px;">
-          {#if !selectedPeer}
-            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-secondary); text-align: center; gap: 12px; opacity: 0.55;">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 48px; height: 48px; color: var(--accent);"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-              <p style="font-size: 0.92rem; font-weight: 600; margin: 0;">{currentLang === 'tr' ? 'Geçmişi görmek için sol panelden bir arkadaş seçin.' : 'Select a friend from the left to view history.'}</p>
-            </div>
-          {:else}
-            {#each filteredTransfers.filter(tr => !tr.filename.startsWith('[TextBase64]')) as tr}
-              <div class="glass-panel animate-slide" style="padding: 14px 18px; border-radius: 12px; border: 1px solid var(--border-light); background: rgba(255,255,255,0.02); display: flex; flex-direction: column; gap: 10px; transition: all 0.25s;">
-                <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px;">
-                  <div style="display: flex; align-items: center; gap: 12px; overflow: hidden; flex: 1;">
-                    <div style="width: 36px; height: 36px; border-radius: 8px; background: {tr.is_sender ? 'rgba(66, 133, 244, 0.08)' : 'rgba(0, 168, 132, 0.08)'}; color: {tr.is_sender ? '#4285f4' : 'var(--accent)'}; display: flex; align-items: center; justify-content: center; font-size: 1.05rem; flex-shrink: 0; border: 1px solid {tr.is_sender ? 'rgba(66, 133, 244, 0.15)' : 'rgba(0, 168, 132, 0.15)'};">
-                      {#if tr.is_sender}
-                        📤
-                      {:else}
-                        📥
-                      {/if}
-                    </div>
-                    <div style="display: flex; flex-direction: column; overflow: hidden; text-align: left;">
-                      <span style="font-size: 0.88rem; font-weight: 600; color: white; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title={tr.filename}>{tr.filename}</span>
-                      <span style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 2px;">
-                        {formatBytes(tr.filesize)} • {tr.is_sender ? (currentLang === 'tr' ? 'Alıcı' : 'Recipient') : (currentLang === 'tr' ? 'Gönderen' : 'Sender')}: <strong style="color: white; font-weight: 600;">{tr.peer_name}</strong>
-                      </span>
-                    </div>
-                  </div>
-
-                  <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-                    {#if tr.status !== 'transferring' && tr.status !== 'paused'}
-                      <span style="font-size: 0.65rem; font-weight: 700; padding: 4px 8px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.5px;
-                        background: {tr.status === 'completed' ? 'rgba(0, 168, 132, 0.08)' : tr.status === 'declined' ? 'rgba(234, 67, 53, 0.08)' : 'rgba(255, 255, 255, 0.04)'};
-                        color: {tr.status === 'completed' ? 'var(--accent)' : tr.status === 'declined' || tr.status === 'failed' ? '#ff8f8f' : 'var(--text-secondary)'};
-                        border: 1px solid {tr.status === 'completed' ? 'rgba(0, 168, 132, 0.15)' : tr.status === 'declined' || tr.status === 'failed' ? 'rgba(234, 67, 53, 0.15)' : 'rgba(255, 255, 255, 0.08)'};">
-                        {tr.status === 'completed' ? t.statusCompleted : tr.status === 'declined' ? t.statusDeclined : tr.status === 'failed' ? t.statusFailed : tr.status}
-                      </span>
-                    {/if}
-                  </div>
-                </div>
-
-                {#if tr.status === 'transferring' || tr.status === 'paused'}
-                  <div class="progress-container" style="margin: 0; padding: 0; background: transparent; border: none; width: 100%;">
-                    <div class="progress-header" style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 5px;">
-                      <span>{tr.status === 'paused' ? t.statusPaused : t.statusTransferring} %{tr.percent}</span>
-                      <span>{tr.status === 'paused' ? '0.0' : tr.speed_mb.toFixed(1)} MB/s</span>
-                    </div>
-                    <div class="progress-bar-bg" style="height: 5px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; width: 100%;">
-                      <div class="progress-bar-fill" style="width: {tr.percent}%; height: 100%; background-color: {tr.status === 'paused' ? '#fbbc05' : 'var(--accent)'}; box-shadow: 0 0 8px {tr.status === 'paused' ? '#fbbc05' : 'var(--accent-glow)'}; transition: width 0.1s ease;"></div>
-                    </div>
-                    <div style="display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px;">
-                      {#if tr.is_sender}
-                        <button on:click={() => togglePauseResume(tr)} class="bubble-btn" style="background-color: rgba(255,255,255,0.04); font-size: 0.68rem; border-color: rgba(255,255,255,0.08); padding: 3px 8px; border-radius: 4px;">
-                          {tr.status === 'paused' ? t.actionResume : t.actionPause}
-                        </button>
-                      {:else}
-                        <button on:click={() => togglePauseResume(tr)} class="bubble-btn" style="background-color: rgba(255,255,255,0.04); font-size: 0.68rem; border-color: rgba(255,255,255,0.08); padding: 3px 8px; border-radius: 4px;">
-                          {tr.status === 'paused' ? t.actionResume : t.actionPause}
-                        </button>
-                        <button on:click={() => cancelTransfer(tr)} class="bubble-btn" style="background-color: rgba(234,67,53,0.08); font-size: 0.68rem; border-color: rgba(234,67,53,0.2); color: #ff8f8f; padding: 3px 8px; border-radius: 4px;">
-                          {t.actionCancel}
-                        </button>
-                      {/if}
-                    </div>
-                  </div>
-                {:else if tr.status === 'completed'}
-                  {#if !tr.is_sender && tr.local_path}
-                    <div style="display: flex; gap: 6px; justify-content: flex-end; width: 100%;">
-                      <button on:click={() => openFile(tr.local_path)} class="bubble-btn open-file-btn" style="padding: 4px 10px; font-size: 0.7rem; border-radius: 4px;">
-                        {t.actionOpen}
-                      </button>
-                      <button on:click={() => openFolder(tr.local_path)} class="bubble-btn folder-btn" title={t.actionShow} style="padding: 4px 10px; font-size: 0.7rem; border-radius: 4px;">
-                        {t.actionShow}
-                      </button>
-                    </div>
-                  {/if}
-                {/if}
-              </div>
-            {:else}
-              <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-secondary); text-align: center; gap: 12px; opacity: 0.55;">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 48px; height: 48px; color: var(--accent);"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                <p style="font-size: 0.92rem; font-weight: 600; margin: 0;">{t.noTransfersYet}</p>
-              </div>
-            {/each}
-          {/if}
-        </div>
-      </div>
-    {:else if !selectedPeer}
+    {#if !selectedPeer}
       <!-- Splash Screen -->
       <div class="splash-screen" style="display: flex; justify-content: center; align-items: center; height: 100%; background: radial-gradient(circle at center, rgba(0,168,132,0.03) 0%, rgba(11,20,26,0) 70%);">
         <div class="splash-content glass-panel animate-fade" style="width: 100%; max-width: 520px; padding: 40px; text-align: center; display: flex; flex-direction: column; align-items: center; border: 1px solid rgba(255,255,255,0.06); background: rgba(17, 27, 33, 0.4); box-shadow: 0 20px 50px rgba(0,0,0,0.5); backdrop-filter: blur(20px);">
@@ -1103,6 +1106,13 @@
             </div>
           </div>
           <div style="display: flex; gap: 10px; align-items: center;">
+            <button on:click={() => viewMode = (viewMode === 'chat' ? 'transfers' : 'chat')} class="bubble-btn animate-fade" style="background-color: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.1); color: white; padding: 6px 12px; display: flex; align-items: center; gap: 5px;">
+              {#if viewMode === 'chat'}
+                📊 {t.sentItems}
+              {:else}
+                💬 {t.chatTab}
+              {/if}
+            </button>
             <button on:click={() => handleRemoveFriend(selectedPeer)} class="bubble-btn animate-fade" style="background-color: rgba(234, 67, 53, 0.08); border-color: rgba(234, 67, 53, 0.15); color: #ff8f8f; padding: 6px 12px; display: flex; align-items: center; gap: 5px;" title={t.deleteFriendTitle}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 12px; height: 12px;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
               {t.deleteFriend}
@@ -1137,159 +1147,271 @@
           </div>
         {/if}
 
-        <!-- Message/Transfer List -->
-        <div class="transfer-history">
-          <div class="security-warning glass-panel">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            {t.e2eWarning}
-          </div>
-
-          {#if filteredTransfers.length === 0}
-            <div class="no-transfers animate-fade">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-              <p>{t.emptyHistory}</p>
-              <span>{t.emptyHistorySub}</span>
+        {#if viewMode === 'chat'}
+          <!-- Message/Transfer List -->
+          <div class="transfer-history" bind:this={chatContainer} on:scroll={handleChatScroll}>
+            <div class="security-warning glass-panel">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              {t.e2eWarning}
             </div>
-          {:else}
-            {#each filteredTransfers as tr (tr.id)}
-              <div class="bubble-row {tr.is_sender ? 'sender-row' : 'receiver-row'}">
-                {#if tr.filename.startsWith("[TextBase64]")}
-                  <!-- Encrypted Chat Text Message Bubble -->
-                  <div class="bubble {tr.is_sender ? 'bubble-sender' : 'bubble-receiver'} glass-panel animate-slide" style="padding: 12px 16px; border-radius: 12px; max-width: 70%; line-height: 1.4; word-break: break-word; font-family: var(--font-main); font-size: 0.92rem; box-shadow: 0 4px 15px rgba(0,0,0,0.15); border: 1px solid var(--glass-border);">
-                    <div style="color: white; font-weight: 500; font-family: var(--font-main);">
-                      {decodeBase64Utf8(tr.filename.substring(12, tr.filename.length - 4))}
-                    </div>
-                    <div style="font-size: 0.65rem; color: rgba(255,255,255,0.45); text-align: right; margin-top: 5px; font-family: var(--font-main); display: flex; align-items: center; justify-content: flex-end; gap: 4px;">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width: 10px; height: 10px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                      {tr.is_sender ? 'Gönderildi' : 'Alındı'} • E2EE
-                    </div>
-                  </div>
-                {:else}
-                  <!-- Standard File Card Bubble -->
-                  <div class="bubble {tr.is_sender ? 'bubble-sender' : 'bubble-receiver'} glass-panel animate-slide">
-                    <!-- File Info -->
-                    <div class="file-card">
-                      <div class="file-icon-bg {getFileIcon(tr.filename)}">
-                        {#if getFileIcon(tr.filename) === 'image'}
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                        {:else if getFileIcon(tr.filename) === 'video'}
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-                        {:else if getFileIcon(tr.filename) === 'audio'}
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-                        {:else if getFileIcon(tr.filename) === 'archive'}
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/></svg>
-                        {:else if getFileIcon(tr.filename) === 'document'}
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-                        {:else}
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
-                        {/if}
-                      </div>
-                      <div class="file-details">
-                        <span class="filename" title={tr.filename}>{tr.filename}</span>
-                        <span class="filesize">{formatBytes(tr.filesize)}</span>
-                      </div>
-                    </div>
 
-                    <!-- Progress Indicator -->
-                    {#if tr.status === 'transferring' || tr.status === 'paused'}
-                      <div class="progress-container">
-                        <div class="progress-header">
-                          <span>{tr.status === 'paused' ? t.statusPaused : t.statusTransferring} %{tr.percent}</span>
-                          <span>{tr.status === 'paused' ? '0.0' : tr.speed_mb.toFixed(1)} MB/s</span>
+            {#if filteredTransfers.length === 0}
+              <div class="no-transfers animate-fade">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                <p>{t.emptyHistory}</p>
+                <span>{t.emptyHistorySub}</span>
+              </div>
+            {:else}
+              {#each filteredTransfers as tr (tr.id)}
+                <div class="bubble-row {tr.is_sender ? 'sender-row' : 'receiver-row'}">
+                  {#if tr.filename.startsWith("[TextBase64]")}
+                    <!-- Encrypted Chat Text Message Bubble -->
+                    <div class="bubble {tr.is_sender ? 'bubble-sender' : 'bubble-receiver'} glass-panel animate-slide" style="padding: 12px 16px; border-radius: 12px; max-width: 70%; line-height: 1.4; word-break: break-word; font-family: var(--font-main); font-size: 0.92rem; box-shadow: 0 4px 15px rgba(0,0,0,0.15); border: 1px solid var(--glass-border);">
+                      <div style="color: white; font-weight: 500; font-family: var(--font-main);">
+                        {decodeBase64Utf8(tr.filename.substring(12, tr.filename.length - 4))}
+                      </div>
+                      <div style="font-size: 0.65rem; color: rgba(255,255,255,0.45); text-align: right; margin-top: 5px; font-family: var(--font-main); display: flex; align-items: center; justify-content: flex-end; gap: 4px;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width: 10px; height: 10px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        {tr.is_sender ? 'Gönderildi' : 'Alındı'} • E2EE
+                      </div>
+                    </div>
+                  {:else}
+                    <!-- Standard File Card Bubble -->
+                    <div class="bubble {tr.is_sender ? 'bubble-sender' : 'bubble-receiver'} glass-panel animate-slide">
+                      <!-- File Info -->
+                      <div class="file-card">
+                        <div class="file-icon-bg {getFileIcon(tr.filename)}">
+                          {#if getFileIcon(tr.filename) === 'image'}
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                          {:else if getFileIcon(tr.filename) === 'video'}
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                          {:else if getFileIcon(tr.filename) === 'audio'}
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                          {:else if getFileIcon(tr.filename) === 'archive'}
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/></svg>
+                          {:else if getFileIcon(tr.filename) === 'document'}
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                          {:else}
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+                          {/if}
                         </div>
-                        <div class="progress-bar-bg">
-                          <div class="progress-bar-fill" style="width: {tr.percent}%; background-color: {tr.status === 'paused' ? '#fbbc05' : 'var(--accent)'}; box-shadow: 0 0 8px {tr.status === 'paused' ? '#fbbc05' : 'var(--accent-glow)'};"></div>
+                        <div class="file-details">
+                          <span class="filename" title={tr.filename}>{tr.filename}</span>
+                          <span class="filesize">{formatBytes(tr.filesize)}</span>
                         </div>
-                        <div style="display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px;">
-                          <button on:click={() => togglePauseResume(tr)} class="bubble-btn" style="background-color: rgba(255,255,255,0.06); font-size: 0.7rem; border-color: rgba(255,255,255,0.1);">
-                            {tr.status === 'paused' ? t.actionResume : t.actionPause}
-                          </button>
-                          {#if !tr.is_sender}
+                      </div>
+
+                      <!-- Progress Indicator -->
+                      {#if tr.status === 'transferring' || tr.status === 'paused'}
+                        <div class="progress-container">
+                          <div class="progress-header">
+                            <span>{tr.status === 'paused' ? t.statusPaused : t.statusTransferring} %{tr.percent}</span>
+                            <span>{tr.status === 'paused' ? '0.0' : tr.speed_mb.toFixed(1)} MB/s</span>
+                          </div>
+                          <div class="progress-bar-bg">
+                            <div class="progress-bar-fill" style="width: {tr.percent}%; background-color: {tr.status === 'paused' ? '#fbbc05' : 'var(--accent)'}; box-shadow: 0 0 8px {tr.status === 'paused' ? '#fbbc05' : 'var(--accent-glow)'};"></div>
+                          </div>
+                          <div style="display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px;">
+                            <button on:click={() => togglePauseResume(tr)} class="bubble-btn" style="background-color: rgba(255,255,255,0.06); font-size: 0.7rem; border-color: rgba(255,255,255,0.1);">
+                              {tr.status === 'paused' ? t.actionResume : t.actionPause}
+                            </button>
                             <button on:click={() => cancelTransfer(tr)} class="bubble-btn" style="background-color: rgba(234,67,53,0.08); font-size: 0.7rem; border-color: rgba(234,67,53,0.2); color: #ff8f8f;">
                               {t.actionCancel}
                             </button>
-                          {/if}
-                        </div>
-                      </div>
-                    {:else if tr.status === 'pending'}
-                      <div class="status-indicator pending animate-pulse">
-                        <span class="dot"></span> {t.statusPending}
-                      </div>
-                    {:else if tr.status === 'completed'}
-                      <div class="status-indicator completed">
-                        <div class="completed-meta">
-                          <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="#00a884" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
-                          <span>{t.statusCompleted}</span>
-                        </div>
-                        
-                        {#if !tr.is_sender && tr.local_path}
-                          <div class="action-buttons animate-fade">
-                            <button on:click={() => openFile(tr.local_path)} class="bubble-btn open-file-btn">
-                              {t.actionOpen}
-                            </button>
-                            <button on:click={() => openFolder(tr.local_path)} class="bubble-btn folder-btn" title={t.actionShow}>
-                              {t.actionShow}
-                            </button>
                           </div>
-                        {/if}
-                      </div>
-                    {:else if tr.status === 'declined'}
-                      <div class="status-indicator declined">
-                        <svg class="alert-icon" viewBox="0 0 24 24" fill="none" stroke="#ea4335" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-                        <span>{t.statusDeclined}</span>
-                      </div>
-                    {:else if tr.status === 'failed'}
-                      <div class="status-indicator failed">
-                        <svg class="alert-icon" viewBox="0 0 24 24" fill="none" stroke="#ea4335" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                        <span>{t.statusFailed} ({tr.peer_name})</span>
-                      </div>
+                        </div>
+                      {:else if tr.status === 'pending'}
+                        <div class="status-indicator pending animate-pulse">
+                          <span class="dot"></span> {t.statusPending}
+                        </div>
+                      {:else if tr.status === 'completed'}
+                        <div class="status-indicator completed" style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+                          <div style="display: flex; align-items: center; gap: 6px; width: 100%;">
+                            <div class="completed-meta">
+                              <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="#00a884" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                              <span>{t.statusCompleted}</span>
+                            </div>
+                          </div>
+                          
+                          <div class="action-buttons animate-fade" style="display: flex; gap: 6px; justify-content: flex-end; width: 100%;">
+                            {#if tr.local_path && tr.file_exists}
+                              <button on:click={() => openPreview(tr.local_path, tr.filename)} class="bubble-btn preview-btn" style="background-color: rgba(0, 168, 132, 0.15); border-color: rgba(0, 168, 132, 0.25); color: #7bf1c3;">
+                                {t.previewBtn}
+                              </button>
+                              <button on:click={() => openFile(tr.local_path)} class="bubble-btn open-file-btn">
+                                {t.actionOpen}
+                              </button>
+                              <button on:click={() => openFolder(tr.local_path)} class="bubble-btn folder-btn" title={t.actionShow}>
+                                {t.actionShow}
+                              </button>
+                              {#if selectedPeer && selectedPeer.online}
+                                <button on:click={() => handleResendFile(tr)} class="bubble-btn" style="background-color: rgba(66, 133, 244, 0.15); border-color: rgba(66, 133, 244, 0.25); color: #8ab4f8;">
+                                  {t.actionResend}
+                                </button>
+                              {/if}
+                            {:else if selectedPeer && selectedPeer.online}
+                              <button on:click={() => handleResendFile(tr)} class="bubble-btn" style="background-color: rgba(66, 133, 244, 0.15); border-color: rgba(66, 133, 244, 0.25); color: #8ab4f8;">
+                                {tr.is_sender ? t.actionResend : t.actionRedownload}
+                              </button>
+                            {/if}
+                          </div>
+                        </div>
+                      {:else if tr.status === 'declined'}
+                        <div class="status-indicator declined">
+                          <svg class="alert-icon" viewBox="0 0 24 24" fill="none" stroke="#ea4335" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                          <span>{t.statusDeclined}</span>
+                        </div>
+                      {:else if tr.status === 'failed'}
+                        <div class="status-indicator failed">
+                          <svg class="alert-icon" viewBox="0 0 24 24" fill="none" stroke="#ea4335" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                          <span>{t.statusFailed} ({tr.peer_name})</span>
+                        </div>
+                      {/if}
+                    </div>
+                  {/if}
+                </div>
+              {/each}
+            {/if}
+          </div>
+
+          <!-- Floating scroll down button -->
+          {#if showScrollDownBtn}
+            <button on:click={() => scrollToBottom('smooth')} class="scroll-down-btn animate-fade" style="position: absolute; bottom: 90px; right: 30px; width: 42px; height: 42px; border-radius: 50%; background: rgba(32, 44, 51, 0.95); border: 1px solid rgba(255, 255, 255, 0.1); color: var(--accent); display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 99; box-shadow: 0 4px 15px rgba(0,0,0,0.4); backdrop-filter: blur(10px); transition: all 0.2s;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="width: 20px; height: 20px;"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+          {/if}
+
+          <!-- Premium E2EE Chat Input Footer -->
+          <footer class="chat-footer-action" style="flex-direction: column; gap: 12px; padding: 16px 24px; background: var(--bg-secondary); border-top: 1px solid var(--border-light); display: flex;">
+            {#if selectedPeer.online}
+              <!-- Message Input Line -->
+              <div style="display: flex; width: 100%; gap: 12px; align-items: center;">
+                <!-- Attachment / Actions Button -->
+                <button on:click={triggerMultipleFileSelect} class="glass-panel" style="background: rgba(255,255,255,0.06); border: 1px solid var(--glass-border); color: var(--text-secondary); width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.25s; flex-shrink: 0;" title={t.btnSendFiles}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                </button>
+                
+                <button on:click={triggerFolderSelect} class="glass-panel" style="background: rgba(255,255,255,0.06); border: 1px solid var(--glass-border); color: var(--text-secondary); width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.25s; flex-shrink: 0;" title={t.btnSendFolder}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                </button>
+
+                <!-- Text Message Input -->
+                <input 
+                  type="text" 
+                  placeholder={t.placeholderWriteMessage} 
+                  bind:value={chatMessageInput} 
+                  on:keydown={handleChatKeyDown}
+                  style="flex: 1; background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: 24px; padding: 12px 20px; color: var(--text-primary); font-family: var(--font-main); font-size: 0.95rem; outline: none; transition: all 0.25s;"
+                />
+
+                <!-- Send Button -->
+                <button 
+                  on:click={handleSendChatMessage} 
+                  class="glowing" 
+                  style="background: var(--accent); color: white; width: 44px; height: 44px; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.25s; flex-shrink: 0; box-shadow: 0 4px 15px var(--accent-glow);"
+                  disabled={!chatMessageInput.trim()}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px; margin-left: 2px;"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                </button>
+              </div>
+            {:else}
+              <div class="offline-footer-notice">
+                {t.offlineNotice}
+              </div>
+            {/if}
+          </footer>
+        {:else}
+          <!-- Transfers History view for this peer -->
+          <div class="transfer-history" bind:this={chatContainer} on:scroll={handleChatScroll}>
+            {#each filteredTransfers.filter(tr => !tr.filename.startsWith('[TextBase64]')) as tr}
+              <div class="glass-panel animate-slide" style="padding: 14px 18px; border-radius: 12px; border: 1px solid var(--border-light); background: rgba(255,255,255,0.02); display: flex; flex-direction: column; gap: 10px; transition: all 0.25s;">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px;">
+                  <div style="display: flex; align-items: center; gap: 12px; overflow: hidden; flex: 1;">
+                    <div style="width: 36px; height: 36px; border-radius: 8px; background: {tr.is_sender ? 'rgba(66, 133, 244, 0.08)' : 'rgba(0, 168, 132, 0.08)'}; color: {tr.is_sender ? '#4285f4' : 'var(--accent)'}; display: flex; align-items: center; justify-content: center; font-size: 1.05rem; flex-shrink: 0; border: 1px solid {tr.is_sender ? 'rgba(66, 133, 244, 0.15)' : 'rgba(0, 168, 132, 0.15)'};">
+                      {#if tr.is_sender}
+                        📤
+                      {:else}
+                        📥
+                      {/if}
+                    </div>
+                    <div style="display: flex; flex-direction: column; overflow: hidden; text-align: left;">
+                      <span style="font-size: 0.88rem; font-weight: 600; color: white; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title={tr.filename}>{tr.filename}</span>
+                      <span style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 2px;">
+                        {formatBytes(tr.filesize)} • {tr.is_sender ? (currentLang === 'tr' ? 'Alıcı' : 'Recipient') : (currentLang === 'tr' ? 'Gönderen' : 'Sender')}: <strong style="color: white; font-weight: 600;">{tr.peer_name}</strong>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+                    {#if tr.status !== 'transferring' && tr.status !== 'paused'}
+                      <span style="font-size: 0.65rem; font-weight: 700; padding: 4px 8px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+                        background: {tr.status === 'completed' ? 'rgba(0, 168, 132, 0.08)' : tr.status === 'declined' ? 'rgba(234, 67, 53, 0.08)' : 'rgba(255, 255, 255, 0.04)'};
+                        color: {tr.status === 'completed' ? 'var(--accent)' : tr.status === 'declined' || tr.status === 'failed' ? '#ff8f8f' : 'var(--text-secondary)'};
+                        border: 1px solid {tr.status === 'completed' ? 'rgba(0, 168, 132, 0.15)' : tr.status === 'declined' || tr.status === 'failed' ? 'rgba(234, 67, 53, 0.15)' : 'rgba(255, 255, 255, 0.08)'};">
+                        {tr.status === 'completed' ? t.statusCompleted : tr.status === 'declined' ? t.statusDeclined : tr.status === 'failed' ? t.statusFailed : tr.status}
+                      </span>
+                    {/if}
+                  </div>
+                </div>
+
+                {#if tr.status === 'transferring' || tr.status === 'paused'}
+                  <div class="progress-container" style="margin: 0; padding: 0; background: transparent; border: none; width: 100%;">
+                    <div class="progress-header" style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 5px;">
+                      <span>{tr.status === 'paused' ? t.statusPaused : t.statusTransferring} %{tr.percent}</span>
+                      <span>{tr.status === 'paused' ? '0.0' : tr.speed_mb.toFixed(1)} MB/s</span>
+                    </div>
+                    <div class="progress-bar-bg" style="height: 5px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; width: 100%;">
+                      <div class="progress-bar-fill" style="width: {tr.percent}%; height: 100%; background-color: {tr.status === 'paused' ? '#fbbc05' : 'var(--accent)'}; box-shadow: 0 0 8px {tr.status === 'paused' ? '#fbbc05' : 'var(--accent-glow)'}; transition: width 0.1s ease;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px;">
+                      <button on:click={() => togglePauseResume(tr)} class="bubble-btn" style="background-color: rgba(255,255,255,0.04); font-size: 0.68rem; border-color: rgba(255,255,255,0.08); padding: 3px 8px; border-radius: 4px;">
+                        {tr.status === 'paused' ? t.actionResume : t.actionPause}
+                      </button>
+                      <button on:click={() => cancelTransfer(tr)} class="bubble-btn" style="background-color: rgba(234,67,53,0.08); font-size: 0.68rem; border-color: rgba(234,67,53,0.2); color: #ff8f8f; padding: 3px 8px; border-radius: 4px;">
+                        {t.actionCancel}
+                      </button>
+                    </div>
+                  </div>
+                {:else if tr.status === 'completed'}
+                  <div style="display: flex; gap: 6px; justify-content: flex-end; width: 100%;">
+                    {#if tr.local_path && tr.file_exists}
+                      <button on:click={() => openPreview(tr.local_path, tr.filename)} class="bubble-btn preview-btn" style="padding: 4px 10px; font-size: 0.7rem; border-radius: 4px; background-color: rgba(0, 168, 132, 0.15); border-color: rgba(0, 168, 132, 0.25); color: #7bf1c3;">
+                        {t.previewBtn}
+                      </button>
+                      <button on:click={() => openFile(tr.local_path)} class="bubble-btn open-file-btn" style="padding: 4px 10px; font-size: 0.7rem; border-radius: 4px;">
+                        {t.actionOpen}
+                      </button>
+                      <button on:click={() => openFolder(tr.local_path)} class="bubble-btn folder-btn" title={t.actionShow} style="padding: 4px 10px; font-size: 0.7rem; border-radius: 4px;">
+                        {t.actionShow}
+                      </button>
+                      {#if selectedPeer && selectedPeer.online}
+                        <button on:click={() => handleResendFile(tr)} class="bubble-btn" style="padding: 4px 10px; font-size: 0.7rem; border-radius: 4px; background-color: rgba(66, 133, 244, 0.15); border-color: rgba(66, 133, 244, 0.25); color: #8ab4f8;">
+                          {t.actionResend}
+                        </button>
+                      {/if}
+                    {:else if selectedPeer && selectedPeer.online}
+                      <button on:click={() => handleResendFile(tr)} class="bubble-btn" style="padding: 4px 10px; font-size: 0.7rem; border-radius: 4px; background-color: rgba(66, 133, 244, 0.15); border-color: rgba(66, 133, 244, 0.25); color: #8ab4f8;">
+                        {tr.is_sender ? t.actionResend : t.actionRedownload}
+                      </button>
                     {/if}
                   </div>
                 {/if}
               </div>
+            {:else}
+              <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-secondary); text-align: center; gap: 12px; opacity: 0.55;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 48px; height: 48px; color: var(--accent);"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <p style="font-size: 0.92rem; font-weight: 600; margin: 0;">{t.noTransfersYet}</p>
+              </div>
             {/each}
+          </div>
+
+          <!-- Floating scroll down button in transfers mode too -->
+          {#if showScrollDownBtn}
+            <button on:click={() => scrollToBottom('smooth')} class="scroll-down-btn animate-fade" style="position: absolute; bottom: 30px; right: 30px; width: 42px; height: 42px; border-radius: 50%; background: rgba(32, 44, 51, 0.95); border: 1px solid rgba(255, 255, 255, 0.1); color: var(--accent); display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 99; box-shadow: 0 4px 15px rgba(0,0,0,0.4); backdrop-filter: blur(10px); transition: all 0.2s;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="width: 20px; height: 20px;"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
           {/if}
-        </div>
-
-        <!-- Premium E2EE Chat Input Footer -->
-        <footer class="chat-footer-action" style="flex-direction: column; gap: 12px; padding: 16px 24px; background: var(--bg-secondary); border-top: 1px solid var(--border-light); display: flex;">
-          {#if selectedPeer.online}
-            <!-- Message Input Line -->
-            <div style="display: flex; width: 100%; gap: 12px; align-items: center;">
-              <!-- Attachment / Actions Button -->
-              <button on:click={triggerMultipleFileSelect} class="glass-panel" style="background: rgba(255,255,255,0.06); border: 1px solid var(--glass-border); color: var(--text-secondary); width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.25s; flex-shrink: 0;" title={t.btnSendFiles}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-              </button>
-              
-              <button on:click={triggerFolderSelect} class="glass-panel" style="background: rgba(255,255,255,0.06); border: 1px solid var(--glass-border); color: var(--text-secondary); width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.25s; flex-shrink: 0;" title={t.btnSendFolder}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-              </button>
-
-              <!-- Text Message Input -->
-              <input 
-                type="text" 
-                placeholder={t.placeholderWriteMessage} 
-                bind:value={chatMessageInput} 
-                on:keydown={handleChatKeyDown}
-                style="flex: 1; background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: 24px; padding: 12px 20px; color: var(--text-primary); font-family: var(--font-main); font-size: 0.95rem; outline: none; transition: all 0.25s;"
-              />
-
-              <!-- Send Button -->
-              <button 
-                on:click={handleSendChatMessage} 
-                class="glowing" 
-                style="background: var(--accent); color: white; width: 44px; height: 44px; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.25s; flex-shrink: 0; box-shadow: 0 4px 15px var(--accent-glow);"
-                disabled={!chatMessageInput.trim()}
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px; margin-left: 2px;"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-              </button>
-            </div>
-          {:else}
-            <div class="offline-footer-notice">
-              {t.offlineNotice}
-            </div>
-          {/if}
-        </footer>
+        {/if}
       </div>
     {/if}
   </main>
@@ -1457,6 +1579,119 @@
       </button>
       <button class="modal-btn accept-btn glowing" on:click={handleAddFriend} style="flex: 1; padding: 12px; font-weight: 700; font-family: var(--font-main); background-color: var(--accent); color: white;" disabled={!addFriendInput.trim()}>
         Arkadaşı Ekle
+      </button>
+    </div>
+  </div>
+</div>
+{/if}
+
+<!-- FRIEND REQUESTS OVERLAY MODAL -->
+{#if showFriendRequestsModal}
+<div class="modal-overlay" style="z-index: 9999; backdrop-filter: blur(25px); background: rgba(11, 20, 26, 0.75);">
+  <div class="modal-card glass-panel animate-slide" style="max-width: 520px; border: 1px solid rgba(255,255,255,0.08); padding: 32px; background: rgba(20, 32, 38, 0.85); box-shadow: 0 25px 60px rgba(0,0,0,0.6); max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; border-radius: 16px;">
+    
+    <!-- Modal Header -->
+    <div class="modal-header" style="justify-content: flex-start; gap: 12px; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 16px; align-items: center;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2" style="width: 22px; height: 22px;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>
+      <h2 style="font-size: 1.35rem; font-weight: 800; color: white; margin: 0; font-family: var(--font-main); letter-spacing: -0.3px;">{t.friendRequests}</h2>
+    </div>
+
+    <!-- Modal Body -->
+    <div class="modal-body" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; font-family: var(--font-main);">
+      {#if friendRequests.length === 0}
+        <div style="text-align: center; color: var(--text-secondary); padding: 30px 10px; font-size: 0.9rem;">
+          Henüz gelen arkadaşlık isteği yok.
+        </div>
+      {:else}
+        {#each friendRequests as req}
+          <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 10px; padding: 14px; display: flex; justify-content: space-between; align-items: center; gap: 16px;">
+            <div style="display: flex; flex-direction: column; text-align: left; overflow: hidden;">
+              <span style="font-size: 0.9rem; font-weight: 600; color: white; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                {req.username || 'Bilinmeyen Kullanıcı'}
+              </span>
+              <span style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px; font-family: monospace;">
+                {req.peer_id}
+              </span>
+            </div>
+            <div style="display: flex; gap: 8px; shrink: 0;">
+              <button class="bubble-btn decline-btn" on:click={() => rejectFriendRequest(req)} style="padding: 6px 12px; font-size: 0.75rem; border-radius: 6px; background-color: rgba(234, 67, 53, 0.08); border-color: rgba(234, 67, 53, 0.2); color: #ff8f8f;">
+                {t.rejectBtnShort}
+              </button>
+              <button class="bubble-btn accept-btn glowing" on:click={() => acceptFriendRequest(req)} style="padding: 6px 12px; font-size: 0.75rem; border-radius: 6px; background-color: rgba(0, 168, 132, 0.15); border-color: rgba(0, 168, 132, 0.25); color: #7bf1c3;">
+                {t.acceptBtnShort}
+              </button>
+            </div>
+          </div>
+        {/each}
+      {/if}
+    </div>
+
+    <!-- Modal Footer Actions -->
+    <div class="modal-footer" style="display: flex; gap: 12px; margin-top: 24px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 18px;">
+      <button class="modal-btn decline-btn" on:click={() => showFriendRequestsModal = false} style="flex: 1; padding: 12px; font-weight: 600; font-family: var(--font-main);">
+        Kapat
+      </button>
+    </div>
+  </div>
+</div>
+{/if}
+
+<!-- FILE PREVIEW OVERLAY MODAL -->
+{#if showPreviewModal}
+<div class="modal-overlay" style="z-index: 10000; backdrop-filter: blur(30px); background: rgba(11, 20, 26, 0.8);">
+  <div class="modal-card glass-panel animate-slide" style="max-width: 85vw; width: 800px; height: 80vh; border: 1px solid rgba(255,255,255,0.08); padding: 24px; background: rgba(20, 32, 38, 0.9); box-shadow: 0 25px 60px rgba(0,0,0,0.6); display: flex; flex-direction: column; overflow: hidden; border-radius: 16px;">
+    
+    <!-- Modal Header -->
+    <div class="modal-header" style="justify-content: space-between; margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 12px; align-items: center; shrink: 0;">
+      <div style="display: flex; align-items: center; gap: 10px; overflow: hidden;">
+        <span style="font-size: 1.25rem;">🔍</span>
+        <h2 style="font-size: 1.15rem; font-weight: 700; color: white; margin: 0; font-family: var(--font-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title={previewFileName}>
+          {previewFileName}
+        </h2>
+      </div>
+      <button class="logout-btn" on:click={() => { showPreviewModal = false; previewContent = ""; }} style="padding: 6px; display: flex; justify-content: center; align-items: center; border-radius: 50%; color: var(--text-secondary); transition: all 0.2s; border: none; background: none; cursor: pointer;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width: 20px; height: 20px;">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Modal Body -->
+    <div class="modal-body" style="flex: 1; overflow: hidden; display: flex; justify-content: center; align-items: center; background: rgba(0,0,0,0.25); border-radius: 8px; border: 1px solid rgba(255,255,255,0.03); position: relative; padding: 12px;">
+      {#if previewLoading}
+        <div style="text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+          <div class="btn-loader" style="width: 40px; height: 40px; border-width: 3px;"></div>
+          <span style="color: var(--text-secondary); font-size: 0.85rem;">{currentLang === 'tr' ? 'Yükleniyor...' : 'Loading preview...'}</span>
+        </div>
+      {:else}
+        {#if previewError}
+          <div style="text-align: center; color: #ff8f8f; padding: 20px; max-width: 80%;">
+            <p style="font-size: 0.95rem; font-weight: 600; margin: 0 0 8px 0;">{previewError}</p>
+          </div>
+        {:else}
+          {#if previewFileType === 'image'}
+            <img src={previewContent} alt={previewFileName} style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; box-shadow: 0 8px 24px rgba(0,0,0,0.3);" />
+          {:else if previewFileType === 'pdf'}
+            <iframe src={previewContent} title={previewFileName} style="width: 100%; height: 100%; border: none; background: white; border-radius: 4px;"></iframe>
+          {:else if previewFileType === 'video'}
+            <video src={previewContent} controls autoplay style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; outline: none; box-shadow: 0 8px 24px rgba(0,0,0,0.3);"></video>
+          {:else if previewFileType === 'text'}
+            <pre style="width: 100%; height: 100%; margin: 0; padding: 16px; overflow: auto; text-align: left; font-family: monospace; font-size: 0.85rem; color: #a9b7c6; background: #2b2b2b; border-radius: 4px; white-space: pre-wrap; word-break: break-all; line-height: 1.4; border: 1px solid rgba(255,255,255,0.05);">{previewContent}</pre>
+          {:else}
+            <div style="text-align: center; color: var(--text-secondary);">
+              <p style="font-size: 1.25rem; margin-bottom: 8px;">📁</p>
+              <p style="font-size: 0.9rem;">{currentLang === 'tr' ? "Bu dosya türü için önizleme desteklenmiyor." : "Preview not supported for this file type."}</p>
+            </div>
+          {/if}
+        {/if}
+      {/if}
+    </div>
+
+    <!-- Modal Footer Actions -->
+    <div class="modal-footer" style="display: flex; gap: 12px; margin-top: 16px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; shrink: 0; justify-content: flex-end;">
+      <button class="modal-btn decline-btn" on:click={() => { showPreviewModal = false; previewContent = ""; }} style="padding: 10px 24px; font-weight: 600; font-family: var(--font-main); border-radius: 8px; font-size: 0.85rem;">
+        {currentLang === 'tr' ? 'Kapat' : 'Close'}
       </button>
     </div>
   </div>

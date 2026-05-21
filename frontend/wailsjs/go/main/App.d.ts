@@ -10,6 +10,8 @@ export function AutoCreateProfile(arg1:string):Promise<void>;
 
 export function AutoLoadProfile():Promise<void>;
 
+export function CancelTransfer(arg1:string):Promise<void>;
+
 export function CheckProfileExists():Promise<boolean>;
 
 export function ClearStartupFilePath():Promise<void>;
@@ -21,6 +23,8 @@ export function EmitCombinedPeers():Promise<void>;
 export function GetActivePeers():Promise<Array<main.Peer>>;
 
 export function GetDownloadsFolder():Promise<string>;
+
+export function GetFilePreview(arg1:string):Promise<main.FilePreviewResult>;
 
 export function GetPeerID():Promise<string>;
 
@@ -54,6 +58,8 @@ export function RegisterProfile(arg1:string,arg2:string):Promise<void>;
 
 export function RemoveFriend(arg1:string):Promise<void>;
 
+export function ResolvePeerName(arg1:Array<number>,arg2:string):Promise<string>;
+
 export function ResumeTransfer(arg1:string):Promise<void>;
 
 export function SelectDirectory():Promise<string>;
@@ -67,6 +73,8 @@ export function SelectMultipleFiles():Promise<Array<string>>;
 export function SendFileToPeer(arg1:string,arg2:number,arg3:string,arg4:string):Promise<string>;
 
 export function SendFolderToPeer(arg1:string,arg2:number,arg3:string,arg4:string):Promise<string>;
+
+export function SendFriendRequest(arg1:string):Promise<void>;
 
 export function SendPathToPeer(arg1:string,arg2:number,arg3:string,arg4:string):Promise<string>;
 

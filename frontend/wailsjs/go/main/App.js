@@ -18,6 +18,10 @@ export function AutoLoadProfile() {
   return window['go']['main']['App']['AutoLoadProfile']();
 }
 
+export function CancelTransfer(arg1) {
+  return window['go']['main']['App']['CancelTransfer'](arg1);
+}
+
 export function CheckProfileExists() {
   return window['go']['main']['App']['CheckProfileExists']();
 }
@@ -40,6 +44,10 @@ export function GetActivePeers() {
 
 export function GetDownloadsFolder() {
   return window['go']['main']['App']['GetDownloadsFolder']();
+}
+
+export function GetFilePreview(arg1) {
+  return window['go']['main']['App']['GetFilePreview'](arg1);
 }
 
 export function GetPeerID() {
@@ -106,6 +114,10 @@ export function RemoveFriend(arg1) {
   return window['go']['main']['App']['RemoveFriend'](arg1);
 }
 
+export function ResolvePeerName(arg1, arg2) {
+  return window['go']['main']['App']['ResolvePeerName'](arg1, arg2);
+}
+
 export function ResumeTransfer(arg1) {
   return window['go']['main']['App']['ResumeTransfer'](arg1);
 }
@@ -132,6 +144,10 @@ export function SendFileToPeer(arg1, arg2, arg3, arg4) {
 
 export function SendFolderToPeer(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['SendFolderToPeer'](arg1, arg2, arg3, arg4);
+}
+
+export function SendFriendRequest(arg1) {
+  return window['go']['main']['App']['SendFriendRequest'](arg1);
 }
 
 export function SendPathToPeer(arg1, arg2, arg3, arg4) {

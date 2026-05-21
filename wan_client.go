@@ -220,6 +220,20 @@ func (w *WANService) connectLoop() {
 			// Disconnected, clear peers and notify UI
 			w.mu.Lock()
 			w.peers = make(map[string]*Peer)
+			for txID, tr := range w.activeTransfers {
+				if tr.Status == "transferring" || tr.Status == "paused" || tr.Status == "pending" {
+					tr.Status = "failed"
+					if file, ok := w.txFiles[txID]; ok {
+						_ = file.Close()
+						delete(w.txFiles, txID)
+					}
+					path := w.txFilePaths[txID]
+					if path != "" {
+						_ = os.Remove(path)
+					}
+					w.app.transferManager.UpdateExternalStatus(txID, "failed", errors.New("bağlantı koptu"))
+				}
+			}
 			w.mu.Unlock()
 			w.app.EmitCombinedPeers()
 			time.Sleep(3 * time.Second)
@@ -666,23 +680,27 @@ func (w *WANService) sendWANRoutine(transferID, targetPeerID, filename string, f
 
 	updateStatus("transferring", nil)
 
-	buffer := make([]byte, ChunkSize)
+	const WANChunkSize = 128 * 1024
+	buffer := make([]byte, WANChunkSize)
 	var bytesSent int64
 	chunkIndex := 0
 	lastTime := time.Now()
 
 	for {
-		// Pause check loop
+		// Pause / cancel check loop
 		for {
 			w.mu.RLock()
 			tr, exists := w.activeTransfers[transferID]
-			var isPaused bool
+			var status string
 			if exists {
-				isPaused = tr.Status == "paused"
+				status = tr.Status
 			}
 			w.mu.RUnlock()
 
-			if !isPaused {
+			if status == "failed" {
+				return
+			}
+			if status != "paused" {
 				break
 			}
 			time.Sleep(100 * time.Millisecond)
@@ -821,6 +839,21 @@ func (w *WANService) CancelTransfer(transferID string) {
 	if exists && (tr.Status == "transferring" || tr.Status == "paused" || tr.Status == "pending") {
 		tr.Status = "failed"
 		peerID := tr.PeerName
+
+		// If we are the receiver, clean up local file and connection resources
+		if !tr.IsSender {
+			if file, ok := w.txFiles[transferID]; ok {
+				_ = file.Close()
+				delete(w.txFiles, transferID)
+			}
+			path := w.txFilePaths[transferID]
+			if path != "" {
+				_ = os.Remove(path)
+				delete(w.txFilePaths, transferID)
+			}
+			delete(w.txKeys, transferID)
+		}
+
 		w.mu.Unlock()
 
 		w.sendSignal(peerID, &WANSignalPayload{

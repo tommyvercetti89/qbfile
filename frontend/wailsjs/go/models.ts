@@ -1,5 +1,19 @@
 export namespace main {
 	
+	export class FilePreviewResult {
+	    type: string;
+	    content: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new FilePreviewResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.type = source["type"];
+	        this.content = source["content"];
+	    }
+	}
 	export class Peer {
 	    peer_id: string;
 	    username: string;
@@ -61,6 +75,7 @@ export namespace main {
 	    peer_name: string;
 	    is_sender: boolean;
 	    local_path: string;
+	    file_exists: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new TransferState(source);
@@ -79,6 +94,7 @@ export namespace main {
 	        this.peer_name = source["peer_name"];
 	        this.is_sender = source["is_sender"];
 	        this.local_path = source["local_path"];
+	        this.file_exists = source["file_exists"];
 	    }
 	}
 
